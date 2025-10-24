@@ -3,17 +3,16 @@
 # Requires: yq (YAML processor)
 
 # ANSI color codes (matching DTS color scheme)
-readonly TUI_NORMAL='\033[0m'
-readonly TUI_RED='\033[0;31m'
-readonly TUI_GREEN='\033[0;32m'
-readonly TUI_YELLOW='\033[0;33m'
-readonly TUI_BLUE='\033[0;36m'  # Cyan, used for borders (matches DTS BLUE)
+TUI_NORMAL='\033[0m'
+TUI_RED='\033[0;31m'
+TUI_GREEN='\033[0;32m'
+TUI_YELLOW='\033[0;33m'
+TUI_BLUE='\033[0;36m'  # Cyan, used for borders (matches DTS BLUE)
 
 # Terminal width configuration
-readonly TUI_MAX_WIDTH=60  # Maximum width for borders and footer wrapping
+TUI_MAX_WIDTH=60  # Maximum width for borders and footer wrapping
 
 # Global variables
-TUI_CONFIG_FILE=""
 TUI_RUNNING=true
 
 # Header variables
@@ -29,6 +28,10 @@ declare -a TUI_ENTRIES_DATA=()       # section_idx|condition|label|value
 declare -a TUI_MENU_DATA=()          # key|condition|label|callback
 declare -a TUI_FOOTER_DATA=()        # key|condition|label|callback
 
+declare -A TUI_REFRESH_CALLBACKS=()
+# used to call callbacks in the same order as they were registered
+TUI_REFRESH_CALLBACKS_ORDER=()
+
 # Terminal control
 tui_clear_screen() {
     printf '\033[2J\033[H'
@@ -40,6 +43,10 @@ tui_hide_cursor() {
 
 tui_show_cursor() {
     printf '\033[?25h'
+}
+
+tui_clear_line() {
+    printf '\r\033[K'
 }
 
 # Trap to ensure cursor is shown on exit
@@ -215,8 +222,6 @@ tui_load_config() {
         echo "Error: jq is required but not installed" >&2
         return 1
     fi
-
-    TUI_CONFIG_FILE="$config_file"
 
     # Convert YAML to JSON once
     local json_config
@@ -437,6 +442,15 @@ tui_read_key() {
     echo "$key"
 }
 
+# Print prompt and read user input
+tui_read_prompt() {
+    local prompt="$1"
+    local answer
+    echo -n "${prompt}: " >&2
+    read -r answer
+    echo "${answer}"
+}
+
 # Execute a callback script
 # Usage: tui_execute_callback "script_path"
 tui_execute_callback() {
@@ -554,6 +568,9 @@ tui_run() {
     TUI_RUNNING=true
 
     while $TUI_RUNNING; do
+        for callback in "${TUI_REFRESH_CALLBACKS_ORDER[@]}"; do
+            eval "${callback}" "${TUI_REFRESH_CALLBACKS["${callback}"]}"
+        done
         tui_render
         tui_handle_input
     done
@@ -565,6 +582,15 @@ tui_run() {
 # Stop the TUI loop
 tui_stop() {
     TUI_RUNNING=false
+}
+
+# register callbacks called during each UI refresh (before showing UI) e.g.
+# tui_register_refresh_callback my_callback_func callback_arg_1 callback_arg_2
+tui_register_refresh_callback() {
+    local callback="$1"
+    shift
+    TUI_REFRESH_CALLBACKS["${callback}"]="$*"
+    TUI_REFRESH_CALLBACKS_ORDER+=("${callback}")
 }
 
 # Export functions for use in other scripts

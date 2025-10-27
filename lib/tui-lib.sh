@@ -460,6 +460,13 @@ tui_read_key_to_continue() {
     tui_read_key
 }
 
+tui_read_enter_to_continue() {
+    # Wait for user to press enter before returning to menu
+    echo "" >&2
+    echo -n "Press Enter to continue..." >&2
+    read -r &>/dev/null
+}
+
 # Execute a callback script
 tui_execute_callback_without_waiting() {
     local script="$1"
@@ -487,7 +494,7 @@ tui_execute_callback() {
     tui_execute_callback_without_waiting "$@"
     local exit_code=$?
 
-    tui_read_key_to_continue
+    tui_read_enter_to_continue
     return $exit_code
 }
 

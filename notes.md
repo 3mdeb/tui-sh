@@ -32,4 +32,19 @@
     print on screen and functions that should be used to e.g. pass strings
     between functions, variables etc. In the future, we could make sure that
     we only show text that is printed via those screen printing functions
-* Find better way to do submenus
+* Find better way to do submenus - in DTS menu was generated dynamically so I
+  created temporary `yaml` and ran `tui_run <path_to_new_config>"`
+* `Enter an option:|` cursor is too close (add space) `Enter an option: |`
+* Allow using commands instead of shell variables?
+* Missing utility functions related to e.g. asking for user choice e.g.:
+  <https://github.com/Dasharo/dts-scripts/blob/7b43513360816fc2171161b39c2a4bc79f88f487/include/dts-functions.sh#L1921>
+* Feature: we could force usage of TUI printing functions to print anything on
+  screen. Usage of `echo` wouldn't print anything, and could be used to pass
+  strings between functions in shell script.
+* DTS related:
+    - delay before refresh after pressing any, non-mapped key (likely due to
+      `subscription_routine` or other pre-render callbacks)
+    - long black screen when using footer options, probably the same reason as
+      before, screen is cleared, `pre-render` callbacks are running and only
+      after that we render UI
+    - Extensions in DTS extensions submenu might not work

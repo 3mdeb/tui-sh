@@ -3,17 +3,16 @@
 # Requires: yq (YAML processor)
 
 # ANSI color codes (matching DTS color scheme)
-readonly TUI_NORMAL='\033[0m'
-readonly TUI_RED='\033[0;31m'
-readonly TUI_GREEN='\033[0;32m'
-readonly TUI_YELLOW='\033[0;33m'
-readonly TUI_BLUE='\033[0;36m'  # Cyan, used for borders (matches DTS BLUE)
+TUI_NORMAL='\033[0m'
+TUI_RED='\033[0;31m'
+TUI_GREEN='\033[0;32m'
+TUI_YELLOW='\033[0;33m'
+TUI_BLUE='\033[0;36m' # Cyan, used for borders (matches DTS BLUE)
 
 # Terminal width configuration
-readonly TUI_MAX_WIDTH=60  # Maximum width for borders and footer wrapping
+TUI_MAX_WIDTH=60 # Maximum width for borders and footer wrapping
 
 # Global variables
-TUI_CONFIG_FILE=""
 TUI_RUNNING=true
 
 # Header variables
@@ -22,12 +21,18 @@ TUI_HEADER_SUBTITLE=""
 TUI_HEADER_LINK=""
 
 # Section arrays (using | as delimiter)
-declare -a TUI_SECTIONS_DATA=()      # condition|label
-declare -a TUI_ENTRIES_DATA=()       # section_idx|condition|label|value
+declare -a TUI_SECTIONS_DATA=() # condition|label
+declare -a TUI_ENTRIES_DATA=()  # section_idx|condition|label|value
 
 # Menu and footer arrays
-declare -a TUI_MENU_DATA=()          # key|condition|label|callback
-declare -a TUI_FOOTER_DATA=()        # key|condition|label|callback
+declare -a TUI_MENU_DATA=()   # key|condition|label|callback
+declare -a TUI_FOOTER_DATA=() # key|condition|label|callback
+
+declare -A TUI_PRE_RENDER_CALLBACKS=()
+declare -A TUI_POST_RENDER_CALLBACKS=()
+# used to call callbacks in the same order as they were registered
+TUI_PRE_RENDER_CALLBACKS_ORDER=()
+TUI_POST_RENDER_CALLBACKS_ORDER=()
 
 # Terminal control
 tui_clear_screen() {
@@ -40,6 +45,10 @@ tui_hide_cursor() {
 
 tui_show_cursor() {
     printf '\033[?25h'
+}
+
+tui_clear_line() {
+    printf '\r\033[K'
 }
 
 # Trap to ensure cursor is shown on exit
@@ -185,7 +194,7 @@ tui_expand_vars() {
 # Usage: tui_check_condition "condition"
 tui_check_condition() {
     local condition="$1"
-    [[ -z "$condition" ]] && return 0  # No condition means always show
+    [[ -z "$condition" ]] && return 0 # No condition means always show
 
     # Expand and evaluate the condition
     local result
@@ -215,8 +224,6 @@ tui_load_config() {
         echo "Error: jq is required but not installed" >&2
         return 1
     fi
-
-    TUI_CONFIG_FILE="$config_file"
 
     # Convert YAML to JSON once
     local json_config
@@ -296,7 +303,7 @@ tui_render_info_sections() {
     local section_data
     for section_data in "${TUI_SECTIONS_DATA[@]}"; do
         local condition label
-        IFS='|' read -r condition label <<< "$section_data"
+        IFS='|' read -r condition label <<<"$section_data"
 
         # Check if section should be displayed
         if ! tui_check_condition "$condition"; then
@@ -311,7 +318,7 @@ tui_render_info_sections() {
         local entry_data
         for entry_data in "${TUI_ENTRIES_DATA[@]}"; do
             local entry_section_idx entry_condition entry_label entry_value
-            IFS='|' read -r entry_section_idx entry_condition entry_label entry_value <<< "$entry_data"
+            IFS='|' read -r entry_section_idx entry_condition entry_label entry_value <<<"$entry_data"
 
             # Only render entries for this section
             if [[ "$entry_section_idx" != "$section_idx" ]]; then
@@ -341,7 +348,7 @@ tui_render_menu() {
     local menu_item
     for menu_item in "${TUI_MENU_DATA[@]}"; do
         local key condition label callback
-        IFS='|' read -r key condition label callback <<< "$menu_item"
+        IFS='|' read -r key condition label callback <<<"$menu_item"
 
         if ! tui_check_condition "$condition"; then
             continue
@@ -365,7 +372,7 @@ tui_render_footer() {
     # Build footer parts
     for footer_item in "${TUI_FOOTER_DATA[@]}"; do
         local key condition label callback
-        IFS='|' read -r key condition label callback <<< "$footer_item"
+        IFS='|' read -r key condition label callback <<<"$footer_item"
 
         if ! tui_check_condition "$condition"; then
             continue
@@ -379,7 +386,7 @@ tui_render_footer() {
         # Auto-wrap footer to multiple lines if needed
         local current_line=""
         local current_length=0
-        local max_width=$((TUI_MAX_WIDTH - 2))  # Leave 2 chars margin
+        local max_width=$((TUI_MAX_WIDTH - 2)) # Leave 2 chars margin
 
         for part in "${footer_parts[@]}"; do
             # Calculate visible length (strip ANSI codes)
@@ -390,7 +397,7 @@ tui_render_footer() {
             # Add separator length if not first item on line
             local separator_length=0
             if [[ -n "$current_line" ]]; then
-                separator_length=2  # "  " = 2 spaces
+                separator_length=2 # "  " = 2 spaces
             fi
 
             # Check if adding this part would exceed max width
@@ -437,9 +444,31 @@ tui_read_key() {
     echo "$key"
 }
 
+# Print prompt and read user input
+tui_read_prompt() {
+    local prompt="$1"
+    local answer
+    echo -n "${prompt}: " >&2
+    read -r answer
+    echo "${answer}"
+}
+
+tui_read_key_to_continue() {
+    # Wait for user to press a key before returning to menu
+    echo "" >&2
+    echo -n "Press any key to continue..." >&2
+    tui_read_key
+}
+
+tui_read_enter_to_continue() {
+    # Wait for user to press enter before returning to menu
+    echo "" >&2
+    echo -n "Press Enter to continue..." >&2
+    read -r &>/dev/null
+}
+
 # Execute a callback script
-# Usage: tui_execute_callback "script_path"
-tui_execute_callback() {
+tui_execute_callback_without_waiting() {
     local script="$1"
 
     if [[ ! -f "$script" ]]; then
@@ -457,13 +486,15 @@ tui_execute_callback() {
 
     # Execute the callback script
     "$script"
+}
+
+# Execute a callback script and wait for user input
+# Usage: tui_execute_callback "script_path"
+tui_execute_callback() {
+    tui_execute_callback_without_waiting "$@"
     local exit_code=$?
 
-    # Wait for user to press a key before returning to menu
-    echo ""
-    echo -n "Press any key to continue..."
-    tui_read_key
-
+    tui_read_enter_to_continue
     return $exit_code
 }
 
@@ -473,7 +504,7 @@ tui_find_menu_callback() {
     local key="$1"
 
     for menu_item in "${TUI_MENU_DATA[@]}"; do
-        IFS='|' read -r menu_key condition label callback <<< "$menu_item"
+        IFS='|' read -r menu_key condition label callback <<<"$menu_item"
 
         if [[ "$menu_key" == "$key" ]]; then
             if tui_check_condition "$condition"; then
@@ -494,7 +525,7 @@ tui_find_footer_callback() {
     local key="$1"
 
     for footer_item in "${TUI_FOOTER_DATA[@]}"; do
-        IFS='|' read -r footer_key condition label callback <<< "$footer_item"
+        IFS='|' read -r footer_key condition label callback <<<"$footer_item"
 
         if [[ "$footer_key" == "$key" ]]; then
             if tui_check_condition "$condition"; then
@@ -533,7 +564,7 @@ tui_handle_input() {
 
     # Try to find callback in footer items
     if callback=$(tui_find_footer_callback "$key"); then
-        tui_execute_callback "$callback"
+        tui_execute_callback_without_waiting "$callback"
         return 0
     fi
 
@@ -554,7 +585,13 @@ tui_run() {
     TUI_RUNNING=true
 
     while $TUI_RUNNING; do
+        for callback in "${TUI_PRE_RENDER_CALLBACKS_ORDER[@]}"; do
+            eval "${callback}" "${TUI_PRE_RENDER_CALLBACKS["${callback}"]}"
+        done
         tui_render
+        for callback in "${TUI_POST_RENDER_CALLBACKS_ORDER[@]}"; do
+            eval "${callback}" "${TUI_POST_RENDER_CALLBACKS["${callback}"]}"
+        done
         tui_handle_input
     done
 
@@ -565,6 +602,23 @@ tui_run() {
 # Stop the TUI loop
 tui_stop() {
     TUI_RUNNING=false
+}
+
+# register callbacks called during each UI refresh (before showing UI) e.g.
+# tui_register_refresh_callback my_callback_func callback_arg_1 callback_arg_2
+tui_register_pre_render_callback() {
+    local callback="$1"
+    shift
+    TUI_PRE_RENDER_CALLBACKS["${callback}"]="$*"
+    TUI_PRE_RENDER_CALLBACKS_ORDER+=("${callback}")
+}
+
+# register callbacks called during each UI refresh (after showing UI)
+tui_register_post_render_callback() {
+    local callback="$1"
+    shift
+    TUI_POST_RENDER_CALLBACKS["${callback}"]="$*"
+    TUI_POST_RENDER_CALLBACKS_ORDER+=("${callback}")
 }
 
 # Export functions for use in other scripts

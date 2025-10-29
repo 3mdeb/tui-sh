@@ -452,10 +452,10 @@ Print a full-width border line (respects TUI_MAX_WIDTH=80).
 Print a section header with borders.
 
 #### `tui_print_section_entry "label" "value"`
-Print a section entry (label: value format).
+Print a section entry (label: value format) with automatic wrapping for long values.
 
 #### `tui_print_menu_option "key" "label"`
-Print a menu option line.
+Print a menu option line with automatic wrapping for long labels.
 
 ### Utility Functions (tui-util.sh)
 
@@ -561,11 +561,34 @@ action="${options[$((selected-1))]}"
 
 #### Layout and Formatting
 
+**Display Functions:**
 - `tui_print_border` - Print full-width border line
 - `tui_print_section_header "LABEL"` - Print section header with borders
-- `tui_print_section_entry "Label" "Value"` - Print formatted entry
-- `tui_print_menu_option "key" "label"` - Print menu option line
+- `tui_print_section_entry "Label" "Value"` - Print formatted entry (auto-wraps long values)
+- `tui_print_menu_option "key" "label"` - Print menu option line (auto-wraps long labels)
 - `tui_generate_border length [char]` - Generate border string
+
+**String Formatting:**
+- `tui_format_wrap "text" width` - Wrap text to multiple lines at word boundaries
+
+**Example:**
+```bash
+# Section entries automatically wrap long values
+ram_info="96GB DDR4 ECC Registered Memory running at 2666MHz"
+tui_print_section_entry "RAM" "$ram_info"
+# Output:
+# **            RAM: 96GB DDR4 ECC Registered Memory
+# **                 running at 2666MHz
+
+# Menu options automatically wrap long labels
+tui_print_menu_option "1" "Install firmware update and configure BIOS settings"
+# Output:
+# **     1) Install firmware update and configure BIOS
+# **          settings
+
+# Direct text wrapping for custom layouts
+tui_format_wrap "Long description text here..." 40
+```
 
 #### Terminal Control
 

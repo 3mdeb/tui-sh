@@ -296,24 +296,9 @@ tui_execute_callback_without_waiting() {
     # Clear screen before executing callback
     tui_clear_screen
 
-    # Check if callback looks like a file path (contains /)
-    if [[ "$callback" == *"/"* ]]; then
-        # Looks like a file path - check if it exists
-        if [[ ! -f "$callback" ]]; then
-            echo "Error: Callback script not found: $callback" >&2
-            return 1
-        fi
-        # It's a file - check if executable
-        if [[ ! -x "$callback" ]]; then
-            echo "Error: Callback script is not executable: $callback" >&2
-            return 1
-        fi
-        # Execute the script
-        "$callback"
-    else
-        # Not a file path - treat as shell command
-        eval "$callback"
-    fi
+    # Execute callback as shell command
+    # Scripts can be called with: bash script.sh or ./script.sh
+    eval "$callback"
 }
 
 # Execute a callback (script or command) and wait for user input

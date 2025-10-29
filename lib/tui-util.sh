@@ -107,6 +107,34 @@ tui_check_condition() {
 }
 
 # ============================================================================
+# String Formatting Functions
+# ============================================================================
+
+# Wrap text to multiple lines with specified width
+# Usage: tui_format_wrap "long text" 40
+# Outputs multiple lines, each max 40 chars, wrapping at word boundaries
+tui_format_wrap() {
+    local text="$1"
+    local width="$2"
+    local line=""
+    local word
+
+    for word in $text; do
+        if [[ -z "$line" ]]; then
+            line="$word"
+        elif [[ $((${#line} + 1 + ${#word})) -le $width ]]; then
+            line="$line $word"
+        else
+            echo "$line"
+            line="$word"
+        fi
+    done
+
+    # Print remaining line
+    [[ -n "$line" ]] && echo "$line"
+}
+
+# ============================================================================
 # Colored Output Functions
 # ============================================================================
 
@@ -211,20 +239,50 @@ tui_print_section_header() {
     tui_print_border
 }
 
-# Print a section entry (label: value)
+# Print a section entry (label: value) with automatic wrapping
 # Usage: tui_print_section_entry "Label" "Value"
+# Long values automatically wrap across multiple lines with proper indentation
 tui_print_section_entry() {
     local label="$1"
     local value="$2"
-    printf "${TUI_BLUE}**${TUI_YELLOW}%15s: ${TUI_NORMAL}%s\n" "$label" "$value"
+    local label_width=15
+    local max_value_width=$((TUI_MAX_WIDTH - 4 - label_width - 2))  # ** + label + ": "
+    local first_line=true
+
+    # Wrap the value
+    while IFS= read -r line; do
+        if $first_line; then
+            # First line with label
+            printf "${TUI_BLUE}**${TUI_YELLOW}%${label_width}s: ${TUI_NORMAL}%s\n" "$label" "$line"
+            first_line=false
+        else
+            # Continuation lines with indentation
+            printf "${TUI_BLUE}**${TUI_NORMAL}%$((label_width + 2))s%s\n" "" "$line"
+        fi
+    done < <(tui_format_wrap "$value" "$max_value_width")
 }
 
-# Print a menu option
+# Print a menu option with automatic label wrapping
 # Usage: tui_print_menu_option "1" "Menu label"
+# Long labels automatically wrap across multiple lines with proper indentation
 tui_print_menu_option() {
     local key="$1"
     local label="$2"
-    printf "${TUI_BLUE}**${TUI_YELLOW}     %s)${TUI_BLUE} %s${TUI_NORMAL}\n" "$key" "$label"
+    local key_prefix_width=10  # "**     X) " = ~10 chars
+    local max_label_width=$((TUI_MAX_WIDTH - key_prefix_width))
+    local first_line=true
+
+    # Wrap the label
+    while IFS= read -r line; do
+        if $first_line; then
+            # First line with key
+            printf "${TUI_BLUE}**${TUI_YELLOW}     %s)${TUI_BLUE} %s${TUI_NORMAL}\n" "$key" "$line"
+            first_line=false
+        else
+            # Continuation lines with indentation and blue color
+            printf "${TUI_BLUE}**%${key_prefix_width}s%s${TUI_NORMAL}\n" "" "$line"
+        fi
+    done < <(tui_format_wrap "$label" "$max_label_width")
 }
 
 # Print a footer action

@@ -190,18 +190,29 @@ tui_expand_vars() {
 }
 
 # Check if a condition evaluates to true
-# Conditions can be environment variable checks like: ${VAR} or ${VAR:-default}
+# Conditions can be:
+#  - Environment variables: ${VAR} or ${VAR:-default}
+#  - Shell commands: systemctl is-active sshd.service
 # Usage: tui_check_condition "condition"
 tui_check_condition() {
     local condition="$1"
     [[ -z "$condition" ]] && return 0 # No condition means always show
 
-    # Expand and evaluate the condition
+    # First, try to expand as environment variable
     local result
     result=$(eval echo "$condition" 2>/dev/null || echo "")
 
-    # Check if result is non-empty and not "false" or "0"
-    [[ -n "$result" && "$result" != "false" && "$result" != "0" ]]
+    # If result is non-empty after variable expansion, check its value
+    if [[ -n "$result" && "$result" != "$condition" ]]; then
+        # Variable was expanded - check if result is truthy
+        [[ "$result" != "false" && "$result" != "0" ]]
+        return $?
+    fi
+
+    # Not a variable expansion - treat as shell command
+    # Execute command and check exit code (suppress all output)
+    eval "$condition" &>/dev/null
+    return $?
 }
 
 # Load YAML configuration and parse into bash variables
@@ -467,29 +478,37 @@ tui_read_enter_to_continue() {
     read -r &>/dev/null
 }
 
-# Execute a callback script
+# Execute a callback (script or shell command)
+# Usage: tui_execute_callback_without_waiting "command" [args...]
 tui_execute_callback_without_waiting() {
-    local script="$1"
+    local callback="$1"
 
-    if [[ ! -f "$script" ]]; then
-        echo "Error: Callback script not found: $script" >&2
-        return 1
-    fi
-
-    if [[ ! -x "$script" ]]; then
-        echo "Error: Callback script is not executable: $script" >&2
-        return 1
-    fi
-
-    # Clear screen and execute callback
+    # Clear screen before executing callback
     tui_clear_screen
 
-    # Execute the callback script
-    "$script"
+    # Check if callback looks like a file path (contains / or starts with ./ or ../)
+    if [[ "$callback" == *"/"* ]]; then
+        # Looks like a file path - check if it exists
+        if [[ ! -f "$callback" ]]; then
+            echo "Error: Callback script not found: $callback" >&2
+            return 1
+        fi
+        # It's a file - check if executable
+        if [[ ! -x "$callback" ]]; then
+            echo "Error: Callback script is not executable: $callback" >&2
+            return 1
+        fi
+        # Execute the script
+        "$callback"
+    else
+        # Not a file path - treat as shell command
+        # Execute the command in a subshell for safety
+        eval "$callback"
+    fi
 }
 
-# Execute a callback script and wait for user input
-# Usage: tui_execute_callback "script_path"
+# Execute a callback (script or command) and wait for user input
+# Usage: tui_execute_callback "script_path" or tui_execute_callback "command with args"
 tui_execute_callback() {
     tui_execute_callback_without_waiting "$@"
     local exit_code=$?

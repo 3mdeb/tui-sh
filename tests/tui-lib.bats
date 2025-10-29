@@ -67,6 +67,38 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
+# Test: Command-based conditions
+@test "tui_check_condition returns true for successful command" {
+    run tui_check_condition "true"
+    [ "$status" -eq 0 ]
+}
+
+@test "tui_check_condition returns false for failed command" {
+    run tui_check_condition "false"
+    [ "$status" -eq 1 ]
+}
+
+@test "tui_check_condition suppresses command output" {
+    run tui_check_condition "echo 'should not see this'"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"should not see this"* ]]
+}
+
+@test "tui_check_condition works with command arguments" {
+    run tui_check_condition "test -d /tmp"
+    [ "$status" -eq 0 ]
+}
+
+@test "tui_check_condition returns false for non-existent directory" {
+    run tui_check_condition "test -d /nonexistent-directory-12345"
+    [ "$status" -eq 1 ]
+}
+
+@test "tui_check_condition handles negated commands" {
+    run tui_check_condition "! false"
+    [ "$status" -eq 0 ]
+}
+
 # Test: YAML configuration loading
 @test "tui_load_config fails for non-existent file" {
     run tui_load_config "$TEST_DIR/nonexistent.yaml"
@@ -175,12 +207,20 @@ EOF
 
 # Test: Callback execution
 @test "tui_execute_callback fails for non-existent script" {
+    # Mock read to avoid waiting for input
+    tui_read_enter_to_continue() { :; }
+    export -f tui_read_enter_to_continue
+
     run tui_execute_callback "$TEST_DIR/nonexistent.sh"
     [ "$status" -eq 1 ]
     [[ "$output" == *"not found"* ]]
 }
 
 @test "tui_execute_callback fails for non-executable script" {
+    # Mock read to avoid waiting for input
+    tui_read_enter_to_continue() { :; }
+    export -f tui_read_enter_to_continue
+
     touch "$TEST_DIR/not_executable.sh"
     run tui_execute_callback "$TEST_DIR/not_executable.sh"
     [ "$status" -eq 1 ]
@@ -196,13 +236,34 @@ exit 0
 EOF
     chmod +x "$TEST_DIR/test_callback.sh"
 
-    # Mock tui_read_key to avoid waiting for input
-    tui_read_key() { echo ""; }
-    export -f tui_read_key
+    # Mock read to avoid waiting for input
+    tui_read_enter_to_continue() { :; }
+    export -f tui_read_enter_to_continue
 
     run tui_execute_callback "$TEST_DIR/test_callback.sh"
     [ "$status" -eq 0 ]
     [[ "$output" == *"callback executed"* ]]
+}
+
+@test "tui_execute_callback runs shell command" {
+    # Mock read to avoid waiting for input
+    tui_read_enter_to_continue() { :; }
+    export -f tui_read_enter_to_continue
+
+    run tui_execute_callback "echo 'command executed' && echo 'with args'"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"command executed"* ]]
+    [[ "$output" == *"with args"* ]]
+}
+
+@test "tui_execute_callback runs command with pipes" {
+    # Mock read to avoid waiting for input
+    tui_read_enter_to_continue() { :; }
+    export -f tui_read_enter_to_continue
+
+    run tui_execute_callback "echo 'line1' && echo 'line2' | grep line2"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"line2"* ]]
 }
 
 # Test: Header rendering

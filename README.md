@@ -165,7 +165,9 @@ value: "$(hostname)"
 
 ## Conditional Display
 
-Control visibility using environment variables:
+Control visibility using either **environment variables** or **shell commands**.
+
+### Variable-Based Conditions
 
 ```yaml
 sections:
@@ -189,38 +191,106 @@ export IS_ADMIN="false"
 export IS_ADMIN="0"
 ```
 
-## Callback Scripts
+### Command-Based Conditions
 
-Callback scripts are regular bash scripts that:
+You can also use shell commands as conditions. The command's exit code determines visibility:
+- Exit code 0 (success) → show element
+- Exit code non-zero (failure) → hide element
 
-1. Are executed when a menu/footer option is selected
-2. Must be executable (`chmod +x`)
-3. Have full screen for output
-4. Return to menu after user presses any key
+```yaml
+sections:
+  - label: "SSH STATUS"
+    condition: "systemctl is-active sshd.service"  # Only shown if SSH is running
+    entries:
+      - label: "Service"
+        value: "Running"
 
-Example callback:
+  - label: "ADMIN SECTION"
+    condition: "test ${UID} -eq 0"  # Only shown when running as root
+    entries:
+      - label: "User"
+        value: "root"
 
+menu:
+  - key: "1"
+    label: "Stop SSH"
+    condition: "systemctl is-active sshd.service"  # Shown when SSH is active
+    callback: "systemctl stop sshd.service"
+
+  - key: "2"
+    label: "Start SSH"
+    condition: "! systemctl is-active sshd.service"  # Shown when SSH is inactive
+    callback: "systemctl start sshd.service"
+
+  - key: "3"
+    label: "Show yq version"
+    condition: "command -v yq"  # Only shown if yq is installed
+    callback: "yq --version"
+```
+
+**Command condition features:**
+- Full bash syntax supported (pipes, `&&`, `||`, `!`, etc.)
+- Command output is suppressed (only exit code matters)
+- Works with `test`, `systemctl`, `command -v`, and any other commands
+- Use `!` to negate conditions
+
+## Callbacks
+
+Callbacks can be either **executable scripts** or **shell commands**.
+
+### Script Callbacks
+
+```yaml
+menu:
+  - key: "1"
+    label: "Run backup"
+    callback: "callbacks/backup.sh"  # Path to executable script
+```
+
+Create `callbacks/backup.sh`:
 ```bash
 #!/bin/bash
-
-echo "=== My Action ==="
-echo ""
-echo "Performing action..."
-
-# Do your work here
+echo "Running backup..."
 sleep 1
-
-echo "Action completed!"
-
-# Exit code is preserved
+echo "Backup completed!"
 exit 0
 ```
 
+Make it executable: `chmod +x callbacks/backup.sh`
+
+### Command Callbacks
+
+You can also use inline shell commands with arguments:
+
+```yaml
+menu:
+  - key: "1"
+    label: "Echo message"
+    callback: "echo 'Hello from command!' && sleep 1"
+
+  - key: "2"
+    label: "List files"
+    callback: "ls -la /tmp | head -10"
+
+  - key: "3"
+    label: "System info"
+    callback: "echo 'System:' && uname -a"
+
+  - key: "4"
+    label: "Enter shell"
+    callback: "bash"  # Launch interactive bash
+```
+
+**Command features:**
+- Full bash syntax supported (pipes, &&, ||, etc.)
+- Environment variables expanded: `"echo $USER"`
+- Command substitution: `"echo $(date)"`
+- Arguments supported: `"ls -la /tmp"`
+
 The library automatically:
-- Clears screen before running callback
-- Waits for user keypress after callback completes
-- Returns to menu
-- Redraws menu
+- Clears screen before execution
+- Waits for Enter key after completion
+- Returns to menu and redraws
 
 ## Library API
 

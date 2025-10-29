@@ -235,7 +235,16 @@ tui_print_border_prefix() {
 tui_print_section_header() {
     local label="$1"
     tui_print_border
-    echo -e "${TUI_BLUE}**${TUI_NORMAL}                $label ${TUI_NORMAL}"
+
+    # Calculate padding for centered label with right border
+    local label_length=${#label}
+    local content_width=$((TUI_MAX_WIDTH - 4))  # ** on left, ** on right
+    local total_padding=$((content_width - label_length))
+    local left_padding=$((total_padding / 2))
+    local right_padding=$((total_padding - left_padding))
+
+    printf "${TUI_BLUE}**${TUI_NORMAL}%${left_padding}s%s%${right_padding}s${TUI_BLUE}**${TUI_NORMAL}\n" "" "$label" ""
+
     tui_print_border
 }
 
@@ -246,18 +255,21 @@ tui_print_section_entry() {
     local label="$1"
     local value="$2"
     local label_width=15
-    local max_value_width=$((TUI_MAX_WIDTH - 4 - label_width - 2))  # ** + label + ": "
+    local max_value_width=$((TUI_MAX_WIDTH - 2 - label_width - 2 - 2))  # ** (left) + label + ": " + ** (right)
     local first_line=true
 
     # Wrap the value
     while IFS= read -r line; do
+        local line_length=${#line}
+        local padding=$((max_value_width - line_length))
+
         if $first_line; then
             # First line with label
-            printf "${TUI_BLUE}**${TUI_YELLOW}%${label_width}s: ${TUI_NORMAL}%s\n" "$label" "$line"
+            printf "${TUI_BLUE}**${TUI_YELLOW}%${label_width}s: ${TUI_NORMAL}%s%${padding}s${TUI_BLUE}**${TUI_NORMAL}\n" "$label" "$line" ""
             first_line=false
         else
             # Continuation lines with indentation
-            printf "${TUI_BLUE}**${TUI_NORMAL}%$((label_width + 2))s%s\n" "" "$line"
+            printf "${TUI_BLUE}**${TUI_NORMAL}%$((label_width + 2))s%s%${padding}s${TUI_BLUE}**${TUI_NORMAL}\n" "" "$line" ""
         fi
     done < <(tui_format_wrap "$value" "$max_value_width")
 }
@@ -268,19 +280,27 @@ tui_print_section_entry() {
 tui_print_menu_option() {
     local key="$1"
     local label="$2"
-    local key_prefix_width=10  # "**     X) " = ~10 chars
-    local max_label_width=$((TUI_MAX_WIDTH - key_prefix_width))
+    # First line: "**     X) " = 2 + 5 + 1 + 2 = 10 chars, then text, then 2 for "**"
+    # Continuation: "**          " = 2 + 10 = 12 chars, then text, then 2 for "**"
+    local first_line_prefix=10
+    local continuation_prefix=12
+    local max_label_width=$((TUI_MAX_WIDTH - first_line_prefix - 2))  # For first line
+    local continuation_width=$((TUI_MAX_WIDTH - continuation_prefix - 2))  # For continuation
     local first_line=true
 
     # Wrap the label
     while IFS= read -r line; do
         if $first_line; then
             # First line with key
-            printf "${TUI_BLUE}**${TUI_YELLOW}     %s)${TUI_BLUE} %s${TUI_NORMAL}\n" "$key" "$line"
+            local line_length=${#line}
+            local padding=$((max_label_width - line_length))
+            printf "${TUI_BLUE}**${TUI_YELLOW}     %s)${TUI_BLUE} %s%${padding}s${TUI_BLUE}**${TUI_NORMAL}\n" "$key" "$line" ""
             first_line=false
         else
             # Continuation lines with indentation and blue color
-            printf "${TUI_BLUE}**%${key_prefix_width}s%s${TUI_NORMAL}\n" "" "$line"
+            local line_length=${#line}
+            local padding=$((continuation_width - line_length))
+            printf "${TUI_BLUE}**%${first_line_prefix}s%s%${padding}s**${TUI_NORMAL}\n" "" "$line" ""
         fi
     done < <(tui_format_wrap "$label" "$max_label_width")
 }

@@ -465,23 +465,3 @@ tui_run() {
     tui_show_cursor
     tui_clear_screen
 }
-
-# ============================================================================
-# Export Core Functions
-# ============================================================================
-
-export -f tui_load_config
-export -f tui_render_header
-export -f tui_render_info_sections
-export -f tui_render_menu
-export -f tui_render_footer
-export -f tui_render
-export -f tui_execute_callback_without_waiting
-export -f tui_execute_callback
-export -f tui_find_menu_callback
-export -f tui_find_footer_callback
-export -f tui_handle_input
-export -f tui_stop
-export -f tui_register_pre_render_callback
-export -f tui_register_post_render_callback
-export -f tui_run

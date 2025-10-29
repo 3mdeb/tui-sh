@@ -12,7 +12,7 @@ source "${SCRIPT_DIR}/../../lib/tui-util.sh"
 tui_clear_screen
 
 tui_print_border
-tui_echo_blue "Interactive Utility Demo"
+tui_print_line_blue "Interactive Utility Demo"
 tui_print_border
 echo ""
 
@@ -25,10 +25,10 @@ echo ""
 
 # Example 2: Colored output
 tui_print_section_header "COLORED OUTPUT"
-tui_echo_red "Red text"
-tui_echo_yellow "Yellow text"
-tui_echo_green "Green text"
-tui_echo_blue "Blue (cyan) text"
+tui_print_line_red "Red text"
+tui_print_line_yellow "Yellow text"
+tui_print_line_green "Green text"
+tui_print_line_blue "Blue (cyan) text"
 echo ""
 
 # Example 3: Section entries
@@ -44,7 +44,7 @@ tui_print_section_header "USER INPUT"
 
 # Read a name
 name=$(tui_read_prompt "Enter your name")
-tui_echo_green "Hello, $name!"
+tui_print_line_green "Hello, $name!"
 echo ""
 
 # Confirm an action
@@ -71,28 +71,28 @@ tui_print_section_header "CONDITION CHECKING"
 # Check environment variable
 export TEST_VAR="enabled"
 if tui_check_condition "\$TEST_VAR"; then
-    tui_echo_green "✓ TEST_VAR is set and enabled"
+    tui_print_line_green "✓ TEST_VAR is set and enabled"
 else
-    tui_echo_red "✗ TEST_VAR is not set or disabled"
+    tui_print_line_red "✗ TEST_VAR is not set or disabled"
 fi
 
 # Check command
 if tui_check_condition "test -d /tmp"; then
-    tui_echo_green "✓ /tmp directory exists"
+    tui_print_line_green "✓ /tmp directory exists"
 else
-    tui_echo_red "✗ /tmp directory does not exist"
+    tui_print_line_red "✗ /tmp directory does not exist"
 fi
 
 # Check if running as root
 if tui_check_condition "test \${UID} -eq 0"; then
-    tui_echo_yellow "Running as root"
+    tui_print_line_yellow "Running as root"
 else
-    tui_echo_green "Running as regular user"
+    tui_print_line_green "Running as regular user"
 fi
 echo ""
 
 tui_print_border
-tui_echo_blue "Demo completed!"
+tui_print_line_blue "Demo completed!"
 tui_print_border
 echo ""
 

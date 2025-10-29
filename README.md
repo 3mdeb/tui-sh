@@ -457,22 +457,161 @@ Print a section entry (label: value format).
 #### `tui_print_menu_option "key" "label"`
 Print a menu option line.
 
-### Utility Functions
+### Utility Functions (tui-util.sh)
 
-#### `tui_expand_vars "string"`
-Expand environment variables in a string.
+The utility library provides a rich set of functions for scripts and callbacks.
 
-#### `tui_check_condition "condition"`
-Check if a condition evaluates to true.
+#### Color Variables
 
-#### `tui_clear_screen`
-Clear the terminal screen.
+Export directly usable in your scripts:
 
-#### `tui_hide_cursor` / `tui_show_cursor`
-Control cursor visibility.
+```bash
+#!/bin/bash
+source "lib/tui-util.sh"
 
-#### `tui_read_key`
-Read a single keypress without waiting for Enter.
+# Use color variables directly
+echo -e "${TUI_RED}Error:${TUI_NORMAL} Something went wrong"
+echo -e "Status: ${TUI_GREEN}OK${TUI_NORMAL}"
+printf "${TUI_YELLOW}Warning: %s${TUI_NORMAL}\n" "$message"
+```
+
+Available variables:
+- `TUI_NORMAL` - Reset to normal
+- `TUI_RED` - Red color
+- `TUI_GREEN` - Green color
+- `TUI_YELLOW` - Yellow color
+- `TUI_BLUE` - Blue/Cyan color
+
+#### Colored Output Functions
+
+**Print lines (with newline):**
+- `tui_print_line_red "text"` - Print red line
+- `tui_print_line_yellow "text"` - Print yellow line
+- `tui_print_line_green "text"` - Print green line
+- `tui_print_line_blue "text"` - Print blue line
+- `tui_print_line_normal "text"` - Print normal line
+
+**Print text (without newline):**
+- `tui_print_text_red "text"` - Print red text (no newline)
+- `tui_print_text_yellow "text"` - Print yellow text
+- `tui_print_text_green "text"` - Print green text
+- `tui_print_text_blue "text"` - Print blue text
+- `tui_print_text_normal "text"` - Print normal text
+
+#### Status Messages
+
+- `tui_print_success "message"` - Green success message
+- `tui_print_warning "message"` - Yellow warning with "Warning:" prefix
+- `tui_print_error "message"` - Red error with "Error:" prefix
+
+#### User Input Functions
+
+**Basic Input:**
+```bash
+# Simple text input
+name=$(tui_read_prompt "Enter your name")
+
+# Single keypress
+key=$(tui_read_key)
+
+# Wait for keypress or Enter
+tui_read_key_to_continue
+tui_read_enter_to_continue
+```
+
+**Password Input:**
+```bash
+# Silent password (no feedback)
+password=$(tui_read_password "Enter password")
+
+# Masked password (shows asterisks)
+password=$(tui_read_password "Enter password" "*")
+```
+
+**Confirmations:**
+```bash
+# Simple y/n confirmation
+if tui_read_confirm "Delete file?"; then
+    echo "Deleted"
+fi
+
+# Custom confirmation prompts
+if tui_ask_for_confirmation "Proceed?" "yes" "no"; then
+    echo "Proceeding..."
+fi
+```
+
+**Choice Menus:**
+```bash
+# Custom keys choice menu
+choice=$(tui_ask_for_choice "Select option:" \
+    "a:Apple" \
+    "b:Banana" \
+    "c:Cherry")
+# Returns: "a", "b", or "c"
+
+# Auto-numbered choice menu
+options=("Install" "Update" "Configure" "Exit")
+selected=$(tui_ask_for_choice_numbered "Choose action:" "${options[@]}")
+# Returns: 1, 2, 3, or 4
+
+# Use the selected option
+action="${options[$((selected-1))]}"
+```
+
+#### Layout and Formatting
+
+- `tui_print_border` - Print full-width border line
+- `tui_print_section_header "LABEL"` - Print section header with borders
+- `tui_print_section_entry "Label" "Value"` - Print formatted entry
+- `tui_print_menu_option "key" "label"` - Print menu option line
+- `tui_generate_border length [char]` - Generate border string
+
+#### Terminal Control
+
+- `tui_clear_screen` - Clear the terminal screen
+- `tui_hide_cursor` - Hide terminal cursor
+- `tui_show_cursor` - Show terminal cursor
+- `tui_clear_line` - Clear current line
+
+#### Utility Helpers
+
+- `tui_expand_vars "string"` - Expand environment variables in a string
+- `tui_check_condition "condition"` - Check if condition is true (env var or command)
+- `tui_visible_length "text"` - Calculate visible text length (strips ANSI codes)
+
+### Complete Utility Example
+
+```bash
+#!/bin/bash
+source "lib/tui-util.sh"
+
+tui_clear_screen
+tui_print_section_header "SYSTEM CONFIGURATION"
+
+# Get user input
+hostname=$(tui_read_prompt "Enter hostname")
+
+# Choose from options
+choice=$(tui_ask_for_choice "Select environment:" \
+    "d:Development" \
+    "s:Staging" \
+    "p:Production")
+
+# Get password with masking
+admin_pwd=$(tui_read_password "Admin password" "*")
+
+# Confirm action
+if tui_ask_for_confirmation "Apply configuration?"; then
+    tui_print_success "Configuration applied!"
+    tui_print_section_entry "Hostname" "$hostname"
+    tui_print_section_entry "Environment" "$choice"
+else
+    tui_print_warning "Configuration cancelled"
+fi
+
+tui_read_enter_to_continue
+```
 
 ## Running Tests
 

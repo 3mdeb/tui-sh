@@ -2,15 +2,24 @@
 # TUI Utility Library - Standalone utilities for user interaction
 # Can be used independently in scripts without the full TUI menu system
 
+# ============================================================================
+# Color Variables - Export for Direct Use in Scripts
+# ============================================================================
+#
+# Usage examples:
+#   echo -e "${TUI_RED}Error message${TUI_NORMAL}"
+#   printf "${TUI_YELLOW}Warning: %s${TUI_NORMAL}\n" "$message"
+#   echo -e "Status: ${TUI_GREEN}OK${TUI_NORMAL}"
+
 # ANSI color codes (matching DTS color scheme)
-TUI_NORMAL='\033[0m'
-TUI_RED='\033[0;31m'
-TUI_GREEN='\033[0;32m'
-TUI_YELLOW='\033[0;33m'
-TUI_BLUE='\033[0;36m' # Cyan, used for borders (matches DTS BLUE)
+export TUI_NORMAL='\033[0m'
+export TUI_RED='\033[0;31m'
+export TUI_GREEN='\033[0;32m'
+export TUI_YELLOW='\033[0;33m'
+export TUI_BLUE='\033[0;36m' # Cyan, used for borders (matches DTS BLUE)
 
 # Terminal width configuration
-TUI_MAX_WIDTH=60 # Maximum width for borders and footer wrapping
+export TUI_MAX_WIDTH=60 # Maximum width for borders and footer wrapping
 
 # ============================================================================
 # Terminal Control Functions
@@ -98,37 +107,59 @@ tui_check_condition() {
 }
 
 # ============================================================================
-# Color Echo Functions (DTS-compatible)
+# Colored Output Functions
 # ============================================================================
 
-# Print text in normal color
-# Usage: tui_echo_normal "text"
-tui_echo_normal() {
+# Print colored line with newline
+# Usage: tui_print_line_normal "text"
+tui_print_line_normal() {
     echo -e "${TUI_NORMAL}$1${TUI_NORMAL}"
 }
 
-# Print text in red
-# Usage: tui_echo_red "text"
-tui_echo_red() {
+# Print red line
+# Usage: tui_print_line_red "text"
+tui_print_line_red() {
     echo -e "${TUI_RED}$1${TUI_NORMAL}"
 }
 
-# Print text in yellow
-# Usage: tui_echo_yellow "text"
-tui_echo_yellow() {
+# Print yellow line
+# Usage: tui_print_line_yellow "text"
+tui_print_line_yellow() {
     echo -e "${TUI_YELLOW}$1${TUI_NORMAL}"
 }
 
-# Print text in green
-# Usage: tui_echo_green "text"
-tui_echo_green() {
+# Print green line
+# Usage: tui_print_line_green "text"
+tui_print_line_green() {
     echo -e "${TUI_GREEN}$1${TUI_NORMAL}"
 }
 
-# Print text in blue (cyan)
-# Usage: tui_echo_blue "text"
-tui_echo_blue() {
+# Print blue (cyan) line
+# Usage: tui_print_line_blue "text"
+tui_print_line_blue() {
     echo -e "${TUI_BLUE}$1${TUI_NORMAL}"
+}
+
+# Print colored text without newline (use with echo -e or printf)
+# Usage: tui_print_text_red "text" && echo ""
+tui_print_text_red() {
+    echo -n -e "${TUI_RED}$1${TUI_NORMAL}"
+}
+
+tui_print_text_yellow() {
+    echo -n -e "${TUI_YELLOW}$1${TUI_NORMAL}"
+}
+
+tui_print_text_green() {
+    echo -n -e "${TUI_GREEN}$1${TUI_NORMAL}"
+}
+
+tui_print_text_blue() {
+    echo -n -e "${TUI_BLUE}$1${TUI_NORMAL}"
+}
+
+tui_print_text_normal() {
+    echo -n -e "${TUI_NORMAL}$1${TUI_NORMAL}"
 }
 
 # ============================================================================
@@ -138,19 +169,19 @@ tui_echo_blue() {
 # Print a warning message in yellow
 # Usage: tui_print_warning "message"
 tui_print_warning() {
-    tui_echo_yellow "Warning: $1"
+    tui_print_line_yellow "Warning: $1"
 }
 
 # Print an error message in red
 # Usage: tui_print_error "message"
 tui_print_error() {
-    tui_echo_red "Error: $1"
+    tui_print_line_red "Error: $1"
 }
 
 # Print a success message in green
 # Usage: tui_print_success "message"
 tui_print_success() {
-    tui_echo_green "$1"
+    tui_print_line_green "$1"
 }
 
 # ============================================================================
@@ -226,6 +257,46 @@ tui_read_prompt() {
     echo "${answer}"
 }
 
+# Read password (silent input with optional masking)
+# Usage: password=$(tui_read_password "Enter password")
+# Usage: password=$(tui_read_password "Enter password" "*")  # Show asterisks
+tui_read_password() {
+    local prompt="$1"
+    local mask_char="${2:-}"  # Optional mask character (empty = silent)
+    local password=""
+    local char
+
+    echo -n "${prompt}: " >&2
+
+    if [[ -n "$mask_char" ]]; then
+        # Masked input - show character for each keypress
+        while IFS= read -r -n 1 -s char; do
+            # Handle Enter key
+            if [[ -z "$char" ]]; then
+                echo "" >&2
+                break
+            fi
+
+            # Handle backspace
+            if [[ "$char" == $'\177' ]] || [[ "$char" == $'\b' ]]; then
+                if [[ -n "$password" ]]; then
+                    password="${password%?}"
+                    echo -n $'\b \b' >&2
+                fi
+            else
+                password+="$char"
+                echo -n "$mask_char" >&2
+            fi
+        done
+    else
+        # Silent input - no visual feedback
+        read -r -s password
+        echo "" >&2
+    fi
+
+    echo "$password"
+}
+
 # Wait for user to press any key
 # Usage: tui_read_key_to_continue
 tui_read_key_to_continue() {
@@ -252,6 +323,105 @@ tui_read_confirm() {
     [[ "$answer" =~ ^[Yy]$ ]]
 }
 
+# Ask user to choose from a list with custom keys
+# Usage: choice=$(tui_ask_for_choice "Select option:" "a:Apple" "b:Banana" "c:Cherry")
+# Returns the selected key (e.g., "a", "b", "c")
+tui_ask_for_choice() {
+    local prompt="$1"
+    shift
+    local choices=("$@")
+
+    echo "$prompt" >&2
+    echo "" >&2
+
+    # Display choices
+    local key label
+    for choice in "${choices[@]}"; do
+        IFS=':' read -r key label <<< "$choice"
+        echo "  $key) $label" >&2
+    done
+    echo "" >&2
+
+    # Read user selection
+    local selected
+    while true; do
+        echo -n "Enter choice: " >&2
+        read -r selected
+
+        # Validate selection
+        for choice in "${choices[@]}"; do
+            IFS=':' read -r key label <<< "$choice"
+            if [[ "$selected" == "$key" ]]; then
+                echo "$selected"
+                return 0
+            fi
+        done
+
+        tui_print_line_red "Invalid choice. Please try again." >&2
+    done
+}
+
+# Ask user to choose from a list with auto-numbered options
+# Usage: choice=$(tui_ask_for_choice_numbered "Select fruit:" "Apple" "Banana" "Cherry")
+# Returns the index of selected item (1-based: 1, 2, 3, ...)
+tui_ask_for_choice_numbered() {
+    local prompt="$1"
+    shift
+    local options=("$@")
+    local count=${#options[@]}
+
+    echo "$prompt" >&2
+    echo "" >&2
+
+    # Display numbered options
+    local i
+    for i in "${!options[@]}"; do
+        echo "  $((i + 1))) ${options[$i]}" >&2
+    done
+    echo "" >&2
+
+    # Read user selection
+    local selected
+    while true; do
+        echo -n "Enter choice (1-$count): " >&2
+        read -r selected
+
+        # Validate selection
+        if [[ "$selected" =~ ^[0-9]+$ ]] && ((selected >= 1 && selected <= count)); then
+            echo "$selected"
+            return 0
+        fi
+
+        tui_print_line_red "Invalid choice. Please enter a number between 1 and $count." >&2
+    done
+}
+
+# Ask user for confirmation with customizable yes/no prompts
+# Usage: if tui_ask_for_confirmation "Proceed with installation?"; then ... fi
+# Usage: if tui_ask_for_confirmation "Continue?" "yes" "no"; then ... fi
+tui_ask_for_confirmation() {
+    local prompt="$1"
+    local yes_text="${2:-y}"
+    local no_text="${3:-n}"
+    local answer
+
+    while true; do
+        echo -n "${prompt} (${yes_text}/${no_text}): " >&2
+        read -r answer
+
+        # Convert to lowercase for comparison
+        answer=$(echo "$answer" | tr '[:upper:]' '[:lower:]')
+
+        if [[ "$answer" == "${yes_text,,}" ]] || [[ "$answer" == "y" ]]; then
+            return 0
+        elif [[ "$answer" == "${no_text,,}" ]] || [[ "$answer" == "n" ]]; then
+            return 1
+        else
+            tui_print_line_red "Invalid input. Please enter '${yes_text}' or '${no_text}'." >&2
+        fi
+    done
+}
+
 # ============================================================================
 # Export Functions for Use in Other Scripts
 # ============================================================================
@@ -268,12 +438,17 @@ export -f tui_generate_border
 export -f tui_expand_vars
 export -f tui_check_condition
 
-# Color echo functions
-export -f tui_echo_normal
-export -f tui_echo_red
-export -f tui_echo_yellow
-export -f tui_echo_green
-export -f tui_echo_blue
+# Colored output functions
+export -f tui_print_line_normal
+export -f tui_print_line_red
+export -f tui_print_line_yellow
+export -f tui_print_line_green
+export -f tui_print_line_blue
+export -f tui_print_text_normal
+export -f tui_print_text_red
+export -f tui_print_text_yellow
+export -f tui_print_text_green
+export -f tui_print_text_blue
 
 # Status message functions
 export -f tui_print_warning
@@ -288,9 +463,15 @@ export -f tui_print_section_entry
 export -f tui_print_menu_option
 export -f tui_print_footer_action
 
-# Input functions
+# Basic input functions
 export -f tui_read_key
 export -f tui_read_prompt
+export -f tui_read_password
 export -f tui_read_key_to_continue
 export -f tui_read_enter_to_continue
 export -f tui_read_confirm
+
+# Advanced input functions
+export -f tui_ask_for_choice
+export -f tui_ask_for_choice_numbered
+export -f tui_ask_for_confirmation

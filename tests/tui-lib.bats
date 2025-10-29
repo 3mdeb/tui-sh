@@ -3,7 +3,7 @@
 
 setup() {
     # Load the library
-    source "${BATS_TEST_DIRNAME}/../lib/tui-lib.sh"
+    source "${BATS_TEST_DIRNAME}/../lib/tui-core.sh"
 
     # Create temporary directory for test files
     TEST_DIR=$(mktemp -d)
@@ -17,7 +17,7 @@ teardown() {
 
 # Test: Library can be sourced
 @test "Library loads without errors" {
-    run bash -c "source ${BATS_TEST_DIRNAME}/../lib/tui-lib.sh && echo success"
+    run bash -c "source ${BATS_TEST_DIRNAME}/../lib/tui-core.sh && echo success"
     [ "$status" -eq 0 ]
     [[ "$output" == *"success"* ]]
 }

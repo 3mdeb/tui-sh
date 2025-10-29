@@ -1,16 +1,21 @@
 #!/bin/bash
-# TUI Library for creating text-based user interfaces
-# Requires: yq (YAML processor)
+# TUI Core Library - Main menu system and rendering engine
+# Requires: tui-util.sh, yq (YAML processor), jq (JSON processor)
 
-# ANSI color codes (matching DTS color scheme)
-TUI_NORMAL='\033[0m'
-TUI_RED='\033[0;31m'
-TUI_GREEN='\033[0;32m'
-TUI_YELLOW='\033[0;33m'
-TUI_BLUE='\033[0;36m' # Cyan, used for borders (matches DTS BLUE)
+# Get the directory where this script is located
+TUI_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Terminal width configuration
-TUI_MAX_WIDTH=60 # Maximum width for borders and footer wrapping
+# Source utility library
+if [[ -f "${TUI_CORE_DIR}/tui-util.sh" ]]; then
+    source "${TUI_CORE_DIR}/tui-util.sh"
+else
+    echo "Error: tui-util.sh not found in ${TUI_CORE_DIR}" >&2
+    return 1 2>/dev/null || exit 1
+fi
+
+# ============================================================================
+# Core State Variables
+# ============================================================================
 
 # Global variables
 TUI_RUNNING=true
@@ -28,192 +33,15 @@ declare -a TUI_ENTRIES_DATA=()  # section_idx|condition|label|value
 declare -a TUI_MENU_DATA=()   # key|condition|label|callback
 declare -a TUI_FOOTER_DATA=() # key|condition|label|callback
 
+# Callback arrays for pre/post render hooks
 declare -A TUI_PRE_RENDER_CALLBACKS=()
 declare -A TUI_POST_RENDER_CALLBACKS=()
-# used to call callbacks in the same order as they were registered
 TUI_PRE_RENDER_CALLBACKS_ORDER=()
 TUI_POST_RENDER_CALLBACKS_ORDER=()
 
-# Terminal control
-tui_clear_screen() {
-    printf '\033[2J\033[H'
-}
-
-tui_hide_cursor() {
-    printf '\033[?25l'
-}
-
-tui_show_cursor() {
-    printf '\033[?25h'
-}
-
-tui_clear_line() {
-    printf '\r\033[K'
-}
-
-# Trap to ensure cursor is shown on exit
-trap 'tui_show_cursor' EXIT INT TERM
-
 # ============================================================================
-# Utility Functions
+# Configuration Loading
 # ============================================================================
-
-# Calculate visible text length (stripping ANSI codes)
-# Usage: tui_visible_length "text with ANSI codes"
-tui_visible_length() {
-    local text="$1"
-    # Remove ANSI escape sequences and count characters
-    echo -n "$text" | sed 's/\x1b\[[0-9;]*m//g' | wc -c
-}
-
-# Generate a border string of specified length with character
-# Usage: tui_generate_border 80 "*"
-tui_generate_border() {
-    local length="$1"
-    local char="${2:-*}"
-    printf "%${length}s" | tr ' ' "$char"
-}
-
-# ============================================================================
-# Color Echo Functions (DTS-compatible)
-# ============================================================================
-
-tui_echo_normal() {
-    echo -e "${TUI_NORMAL}$1${TUI_NORMAL}"
-}
-
-tui_echo_red() {
-    echo -e "${TUI_RED}$1${TUI_NORMAL}"
-}
-
-tui_echo_yellow() {
-    echo -e "${TUI_YELLOW}$1${TUI_NORMAL}"
-}
-
-tui_echo_green() {
-    echo -e "${TUI_GREEN}$1${TUI_NORMAL}"
-}
-
-tui_echo_blue() {
-    echo -e "${TUI_BLUE}$1${TUI_NORMAL}"
-}
-
-# ============================================================================
-# Status Message Functions
-# ============================================================================
-
-tui_print_warning() {
-    tui_echo_yellow "Warning: $1"
-}
-
-tui_print_error() {
-    tui_echo_red "Error: $1"
-}
-
-tui_print_success() {
-    tui_echo_green "$1"
-}
-
-# ============================================================================
-# Border and Layout Functions
-# ============================================================================
-
-# Print a full-width border line
-# Usage: tui_print_border
-tui_print_border() {
-    local border
-    border=$(tui_generate_border "$TUI_MAX_WIDTH" "*")
-    echo -e "${TUI_BLUE}${border}${TUI_NORMAL}"
-}
-
-# Print the "**" prefix used in sections and menu items
-# Usage: tui_print_border_prefix
-tui_print_border_prefix() {
-    echo -n -e "${TUI_BLUE}**${TUI_NORMAL}"
-}
-
-# ============================================================================
-# Section Rendering Functions
-# ============================================================================
-
-# Print a section header with borders
-# Usage: tui_print_section_header "SECTION LABEL"
-tui_print_section_header() {
-    local label="$1"
-    tui_print_border
-    echo -e "${TUI_BLUE}**${TUI_NORMAL}                $label ${TUI_NORMAL}"
-    tui_print_border
-}
-
-# Print a section entry (label: value)
-# Usage: tui_print_section_entry "Label" "Value"
-tui_print_section_entry() {
-    local label="$1"
-    local value="$2"
-    printf "${TUI_BLUE}**${TUI_YELLOW}%15s: ${TUI_NORMAL}%s\n" "$label" "$value"
-}
-
-# ============================================================================
-# Menu Rendering Functions
-# ============================================================================
-
-# Print a menu option
-# Usage: tui_print_menu_option "1" "Menu label"
-tui_print_menu_option() {
-    local key="$1"
-    local label="$2"
-    printf "${TUI_BLUE}**${TUI_YELLOW}     %s)${TUI_BLUE} %s${TUI_NORMAL}\n" "$key" "$label"
-}
-
-# ============================================================================
-# Footer Rendering Functions
-# ============================================================================
-
-# Print a footer action (used internally by tui_render_footer)
-# Usage: tui_print_footer_action "K" "label"
-tui_print_footer_action() {
-    local key="$1"
-    local label="$2"
-    echo -n -e "${TUI_RED}$key${TUI_NORMAL} to $label"
-}
-
-# ============================================================================
-# Core Functions
-# ============================================================================
-
-# Expand environment variables in a string
-# Usage: tui_expand_vars "string with $VAR"
-tui_expand_vars() {
-    local string="$1"
-    # Use eval to expand variables, but safely quote the result
-    eval "printf '%s' \"$string\""
-}
-
-# Check if a condition evaluates to true
-# Conditions can be:
-#  - Environment variables: ${VAR} or ${VAR:-default}
-#  - Shell commands: systemctl is-active sshd.service
-# Usage: tui_check_condition "condition"
-tui_check_condition() {
-    local condition="$1"
-    [[ -z "$condition" ]] && return 0 # No condition means always show
-
-    # First, try to expand as environment variable
-    local result
-    result=$(eval echo "$condition" 2>/dev/null || echo "")
-
-    # If result is non-empty after variable expansion, check its value
-    if [[ -n "$result" && "$result" != "$condition" ]]; then
-        # Variable was expanded - check if result is truthy
-        [[ "$result" != "false" && "$result" != "0" ]]
-        return $?
-    fi
-
-    # Not a variable expansion - treat as shell command
-    # Execute command and check exit code (suppress all output)
-    eval "$condition" &>/dev/null
-    return $?
-}
 
 # Load YAML configuration and parse into bash variables
 # Usage: tui_load_config "config.yaml"
@@ -240,7 +68,7 @@ tui_load_config() {
     local json_config
     json_config=$(yq eval -o=json "$config_file")
 
-    # Parse header (using @ to safely handle special characters)
+    # Parse header
     TUI_HEADER_TITLE=$(echo "$json_config" | jq -r '.header.title // ""')
     TUI_HEADER_SUBTITLE=$(echo "$json_config" | jq -r '.header.subtitle // ""')
     TUI_HEADER_LINK=$(echo "$json_config" | jq -r '.header.link // ""')
@@ -287,7 +115,12 @@ tui_load_config() {
     done < <(echo "$json_config" | jq -r '.footer[]? | .key + "|" + (.condition // "") + "|" + (.label | gsub("\\|"; "\\|")) + "|" + .callback')
 }
 
+# ============================================================================
+# Rendering Functions
+# ============================================================================
+
 # Render header section
+# Usage: tui_render_header
 tui_render_header() {
     if [[ -n "$TUI_HEADER_TITLE" ]]; then
         local title
@@ -309,6 +142,7 @@ tui_render_header() {
 }
 
 # Render all information sections
+# Usage: tui_render_info_sections
 tui_render_info_sections() {
     local section_idx=0
     local section_data
@@ -350,6 +184,7 @@ tui_render_info_sections() {
 }
 
 # Render main menu options
+# Usage: tui_render_menu
 tui_render_menu() {
     if [[ ${#TUI_MENU_DATA[@]} -eq 0 ]]; then
         return 0
@@ -372,6 +207,7 @@ tui_render_menu() {
 }
 
 # Render footer actions with auto-wrap
+# Usage: tui_render_footer
 tui_render_footer() {
     if [[ ${#TUI_FOOTER_DATA[@]} -eq 0 ]]; then
         return 0
@@ -437,6 +273,7 @@ tui_render_footer() {
 }
 
 # Render complete menu
+# Usage: tui_render
 tui_render() {
     tui_clear_screen
     tui_render_header
@@ -447,46 +284,19 @@ tui_render() {
     echo -n -e "${TUI_YELLOW}Enter an option:${TUI_NORMAL}"
 }
 
-# Read a single keypress without waiting for Enter
-# Returns the pressed key
-tui_read_key() {
-    local key
-    read -n 1 -s key
-    echo "$key"
-}
+# ============================================================================
+# Callback Execution
+# ============================================================================
 
-# Print prompt and read user input
-tui_read_prompt() {
-    local prompt="$1"
-    local answer
-    echo -n "${prompt}: " >&2
-    read -r answer
-    echo "${answer}"
-}
-
-tui_read_key_to_continue() {
-    # Wait for user to press a key before returning to menu
-    echo "" >&2
-    echo -n "Press any key to continue..." >&2
-    tui_read_key
-}
-
-tui_read_enter_to_continue() {
-    # Wait for user to press enter before returning to menu
-    echo "" >&2
-    echo -n "Press Enter to continue..." >&2
-    read -r &>/dev/null
-}
-
-# Execute a callback (script or shell command)
-# Usage: tui_execute_callback_without_waiting "command" [args...]
+# Execute a callback (script or shell command) without waiting
+# Usage: tui_execute_callback_without_waiting "command"
 tui_execute_callback_without_waiting() {
     local callback="$1"
 
     # Clear screen before executing callback
     tui_clear_screen
 
-    # Check if callback looks like a file path (contains / or starts with ./ or ../)
+    # Check if callback looks like a file path (contains /)
     if [[ "$callback" == *"/"* ]]; then
         # Looks like a file path - check if it exists
         if [[ ! -f "$callback" ]]; then
@@ -502,13 +312,12 @@ tui_execute_callback_without_waiting() {
         "$callback"
     else
         # Not a file path - treat as shell command
-        # Execute the command in a subshell for safety
         eval "$callback"
     fi
 }
 
 # Execute a callback (script or command) and wait for user input
-# Usage: tui_execute_callback "script_path" or tui_execute_callback "command with args"
+# Usage: tui_execute_callback "script_path" or tui_execute_callback "command"
 tui_execute_callback() {
     tui_execute_callback_without_waiting "$@"
     local exit_code=$?
@@ -517,8 +326,12 @@ tui_execute_callback() {
     return $exit_code
 }
 
+# ============================================================================
+# Menu Navigation
+# ============================================================================
+
 # Find menu item by key and return its callback
-# Usage: tui_find_menu_callback "key"
+# Usage: callback=$(tui_find_menu_callback "1")
 tui_find_menu_callback() {
     local key="$1"
 
@@ -539,7 +352,7 @@ tui_find_menu_callback() {
 }
 
 # Find footer item by key and return its callback
-# Usage: tui_find_footer_callback "key"
+# Usage: callback=$(tui_find_footer_callback "Q")
 tui_find_footer_callback() {
     local key="$1"
 
@@ -560,7 +373,7 @@ tui_find_footer_callback() {
 }
 
 # Handle user input
-# Returns: 0 to continue, 1 to exit
+# Usage: tui_handle_input
 tui_handle_input() {
     local key
     key=$(tui_read_key)
@@ -591,7 +404,35 @@ tui_handle_input() {
     return 0
 }
 
-# Main loop
+# ============================================================================
+# Main Loop and Control
+# ============================================================================
+
+# Stop the TUI loop
+# Usage: tui_stop
+tui_stop() {
+    TUI_RUNNING=false
+}
+
+# Register callbacks called before each render
+# Usage: tui_register_pre_render_callback callback_func arg1 arg2
+tui_register_pre_render_callback() {
+    local callback="$1"
+    shift
+    TUI_PRE_RENDER_CALLBACKS["${callback}"]="$*"
+    TUI_PRE_RENDER_CALLBACKS_ORDER+=("${callback}")
+}
+
+# Register callbacks called after each render
+# Usage: tui_register_post_render_callback callback_func arg1 arg2
+tui_register_post_render_callback() {
+    local callback="$1"
+    shift
+    TUI_POST_RENDER_CALLBACKS["${callback}"]="$*"
+    TUI_POST_RENDER_CALLBACKS_ORDER+=("${callback}")
+}
+
+# Main TUI loop
 # Usage: tui_run "config.yaml"
 tui_run() {
     local config_file="$1"
@@ -604,13 +445,20 @@ tui_run() {
     TUI_RUNNING=true
 
     while $TUI_RUNNING; do
+        # Call pre-render callbacks
         for callback in "${TUI_PRE_RENDER_CALLBACKS_ORDER[@]}"; do
             eval "${callback}" "${TUI_PRE_RENDER_CALLBACKS["${callback}"]}"
         done
+
+        # Render the menu
         tui_render
+
+        # Call post-render callbacks
         for callback in "${TUI_POST_RENDER_CALLBACKS_ORDER[@]}"; do
             eval "${callback}" "${TUI_POST_RENDER_CALLBACKS["${callback}"]}"
         done
+
+        # Handle user input
         tui_handle_input
     done
 
@@ -618,78 +466,22 @@ tui_run() {
     tui_clear_screen
 }
 
-# Stop the TUI loop
-tui_stop() {
-    TUI_RUNNING=false
-}
+# ============================================================================
+# Export Core Functions
+# ============================================================================
 
-# register callbacks called during each UI refresh (before showing UI) e.g.
-# tui_register_refresh_callback my_callback_func callback_arg_1 callback_arg_2
-tui_register_pre_render_callback() {
-    local callback="$1"
-    shift
-    TUI_PRE_RENDER_CALLBACKS["${callback}"]="$*"
-    TUI_PRE_RENDER_CALLBACKS_ORDER+=("${callback}")
-}
-
-# register callbacks called during each UI refresh (after showing UI)
-tui_register_post_render_callback() {
-    local callback="$1"
-    shift
-    TUI_POST_RENDER_CALLBACKS["${callback}"]="$*"
-    TUI_POST_RENDER_CALLBACKS_ORDER+=("${callback}")
-}
-
-# Export functions for use in other scripts
-
-# Terminal control
-export -f tui_clear_screen
-export -f tui_hide_cursor
-export -f tui_show_cursor
-
-# Utility functions
-export -f tui_visible_length
-export -f tui_generate_border
-
-# Color echo functions
-export -f tui_echo_normal
-export -f tui_echo_red
-export -f tui_echo_yellow
-export -f tui_echo_green
-export -f tui_echo_blue
-
-# Status message functions
-export -f tui_print_warning
-export -f tui_print_error
-export -f tui_print_success
-
-# Border and layout functions
-export -f tui_print_border
-export -f tui_print_border_prefix
-
-# Section rendering functions
-export -f tui_print_section_header
-export -f tui_print_section_entry
-
-# Menu rendering functions
-export -f tui_print_menu_option
-
-# Footer rendering functions
-export -f tui_print_footer_action
-
-# Core functions
-export -f tui_expand_vars
-export -f tui_check_condition
 export -f tui_load_config
 export -f tui_render_header
 export -f tui_render_info_sections
 export -f tui_render_menu
 export -f tui_render_footer
 export -f tui_render
-export -f tui_read_key
+export -f tui_execute_callback_without_waiting
 export -f tui_execute_callback
 export -f tui_find_menu_callback
 export -f tui_find_footer_callback
 export -f tui_handle_input
-export -f tui_run
 export -f tui_stop
+export -f tui_register_pre_render_callback
+export -f tui_register_post_render_callback
+export -f tui_run

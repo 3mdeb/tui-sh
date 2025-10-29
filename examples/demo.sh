@@ -5,8 +5,8 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Source the TUI library
-source "$PROJECT_ROOT/lib/tui-lib.sh"
+# Source the TUI core library
+source "$PROJECT_ROOT/lib/tui-core.sh"
 
 # Set up example environment variables
 export TOOL_VERSION="2.7.1"

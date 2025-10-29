@@ -18,9 +18,68 @@ A simple bash library for creating text-based user interfaces with immediate key
 ## Requirements
 
 - Bash 4.0 or later
-- `yq` - YAML processor
-- `jq` - JSON processor
+- `yq` - YAML processor (for tui-core.sh / full TUI menu)
+- `jq` - JSON processor (for tui-core.sh / full TUI menu)
 - Optional: `bats` for running tests
+
+## Library Structure
+
+The library is split into modular components:
+
+### `lib/tui-util.sh` - Standalone Utilities
+**Lightweight utility functions for user interaction without the menu system.**
+
+Use this in callback scripts or standalone scripts when you need:
+- Terminal control (clear screen, hide/show cursor)
+- Colored output (red, yellow, green, blue)
+- Status messages (warnings, errors, success)
+- Borders and formatted sections
+- User input (prompts, confirmations, key presses)
+- Condition checking (environment variables and commands)
+
+**No dependencies** on yq/jq. Perfect for callback scripts!
+
+```bash
+#!/bin/bash
+# Source only the utilities
+source "lib/tui-util.sh"
+
+# Use utility functions
+tui_print_success "Operation completed!"
+name=$(tui_read_prompt "Enter your name")
+if tui_read_confirm "Continue?"; then
+    tui_print_section_entry "Name" "$name"
+fi
+```
+
+### `lib/tui-core.sh` - Full TUI Menu System
+**Complete menu system with YAML configuration.**
+
+Automatically sources `tui-util.sh` and adds:
+- YAML configuration loading
+- Menu rendering and navigation
+- Section and header rendering
+- Main event loop
+- Callback execution
+
+**Requires** yq and jq for YAML parsing.
+
+```bash
+#!/bin/bash
+# Source the core library (includes util)
+source "lib/tui-core.sh"
+
+# Run the TUI
+tui_run "my-app.yaml"
+```
+
+## Use Cases
+
+| Scenario | Library to Use | Dependencies |
+|----------|---------------|--------------|
+| Callback script with user interaction | `tui-util.sh` | None |
+| Standalone script with colored output | `tui-util.sh` | None |
+| Full TUI menu application | `tui-core.sh` | yq, jq |
 
 ## Quick Start
 
@@ -88,8 +147,8 @@ Create `my-app.sh`:
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Source the TUI library
-source "${SCRIPT_DIR}/lib/tui-lib.sh"
+# Source the TUI core library
+source "${SCRIPT_DIR}/lib/tui-core.sh"
 
 # Set environment variables
 export APP_VERSION="1.0.0"
@@ -291,6 +350,54 @@ The library automatically:
 - Clears screen before execution
 - Waits for Enter key after completion
 - Returns to menu and redraws
+
+### Using tui-util.sh in Callbacks
+
+Callback scripts can source `tui-util.sh` for enhanced user interaction without depending on the full menu system:
+
+```bash
+#!/bin/bash
+# callbacks/interactive-backup.sh
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source only the utility library (no yq/jq required)
+source "${SCRIPT_DIR}/../lib/tui-util.sh"
+
+# Clear screen and show header
+tui_clear_screen
+tui_print_section_header "BACKUP UTILITY"
+
+# Get backup path from user
+backup_path=$(tui_read_prompt "Enter backup destination")
+
+# Confirm before proceeding
+if ! tui_read_confirm "Backup to $backup_path?"; then
+    tui_print_warning "Backup cancelled"
+    exit 1
+fi
+
+# Show progress
+tui_print_section_entry "Status" "Running backup..."
+# ... perform backup ...
+
+if [ $? -eq 0 ]; then
+    tui_print_success "Backup completed successfully!"
+else
+    tui_print_error "Backup failed!"
+    exit 1
+fi
+
+exit 0
+```
+
+**Benefits of using tui-util.sh in callbacks:**
+- Consistent look and feel with the main menu
+- No yq/jq dependencies
+- Lightweight (only ~300 lines)
+- Rich user interaction (prompts, confirmations, colored output)
+- Reusable functions across all your scripts
 
 ## Library API
 

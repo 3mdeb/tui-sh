@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Source the TUI library
-source "$PROJECT_ROOT/lib/tui-lib.sh"
+source "$PROJECT_ROOT/lib/tui-core.sh"
 
 # Initialize state file
 STATE_FILE="/tmp/tui-ssh-state"

@@ -1,50 +1,76 @@
 # TUI-SH - Text User Interface Library for Bash
 
-A simple bash library for creating text-based user interfaces with immediate keypress response, ANSI color support, and YAML-based configuration.
+A lightweight bash library for creating text-based user interfaces with YAML
+configuration, ANSI colors, and immediate keypress handling.
 
 ## Features
 
-- YAML-based configuration for menu layouts
-- Immediate keypress handling (no need to press Enter)
-- ANSI colors and styling (DTS-compatible color scheme)
-- Serial port compatible
-- Dynamic content from environment variables
-- Conditional section/entry display
-- Callback system for menu actions
-- Full clear & redraw rendering
-- 80-column terminal support with auto-wrapping footer
-- Helper functions for custom rendering
+- **YAML-based configuration** - Define menus in YAML
+- **Two-library architecture** - Use utilities standalone or full menu system
+- **Immediate keypress response** - No Enter key needed
+- **Dynamic content** - Environment variables and command substitution
+- **Conditional display** - Show/hide elements based on conditions
+- **Auto-wrapping text** - Handles long labels and values gracefully
+- **Serial port compatible** - Works over SSH and serial consoles
 
 ## Requirements
 
-- Bash 4.0 or later
-- `yq` - YAML processor (for tui-core.sh / full TUI menu)
-- `jq` - JSON processor (for tui-core.sh / full TUI menu)
-- Optional: `bats` for running tests
+- Bash 4.0+
+- `yq` for YAML parsing (menu system only)
 
-## Library Structure
+## Quick Start
 
-The library is split into modular components:
+### 1. Create YAML Configuration
+
+`my-app.yaml`:
+```yaml
+header:
+  title: " My Application "
+
+sections:
+  - label: "SYSTEM INFO"
+    entries:
+      - label: "User"
+        value: "${USER}"
+
+menu:
+  - key: "1"
+    label: "Run backup"
+    callback: "echo 'Running backup...' && sleep 1"
+
+footer:
+  - key: "Q"
+    label: "quit"
+    callback: "exit 0"
+```
+
+### 2. Create Application Script
+
+`my-app.sh`:
+```bash
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/tui-core.sh"
+tui_run "${SCRIPT_DIR}/my-app.yaml"
+```
+
+### 3. Run
+
+```bash
+chmod +x my-app.sh
+./my-app.sh
+```
+
+## Library Architecture
 
 ### `lib/tui-util.sh` - Standalone Utilities
-**Lightweight utility functions for user interaction without the menu system.**
 
-Use this in callback scripts or standalone scripts when you need:
-- Terminal control (clear screen, hide/show cursor)
-- Colored output (red, yellow, green, blue)
-- Status messages (warnings, errors, success)
-- Borders and formatted sections
-- User input (prompts, confirmations, key presses)
-- Condition checking (environment variables and commands)
-
-**No dependencies** on yq/jq. Perfect for callback scripts!
+Lightweight functions for scripts and callbacks. **No dependencies.**
 
 ```bash
 #!/bin/bash
-# Source only the utilities
 source "lib/tui-util.sh"
 
-# Use utility functions
 tui_print_success "Operation completed!"
 name=$(tui_read_prompt "Enter your name")
 if tui_read_confirm "Continue?"; then
@@ -52,171 +78,72 @@ if tui_read_confirm "Continue?"; then
 fi
 ```
 
-### `lib/tui-core.sh` - Full TUI Menu System
-**Complete menu system with YAML configuration.**
+**Use for:**
+- Callback scripts with user interaction
+- Colored output and formatted display
+- Input prompts and confirmations
 
-Automatically sources `tui-util.sh` and adds:
-- YAML configuration loading
-- Menu rendering and navigation
-- Section and header rendering
-- Main event loop
-- Callback execution
+### `lib/tui-core.sh` - Full Menu System
 
-**Requires** yq and jq for YAML parsing.
+Complete YAML-driven menu system. **Requires yq.**
 
 ```bash
 #!/bin/bash
-# Source the core library (includes util)
 source "lib/tui-core.sh"
-
-# Run the TUI
-tui_run "my-app.yaml"
+tui_run "config.yaml"
 ```
 
-## Use Cases
+**Use for:**
+- Full TUI applications
+- Multi-section information displays
+- Dynamic menu navigation
 
-| Scenario | Library to Use | Dependencies |
-|----------|---------------|--------------|
-| Callback script with user interaction | `tui-util.sh` | None |
-| Standalone script with colored output | `tui-util.sh` | None |
-| Full TUI menu application | `tui-core.sh` | yq, jq |
+## YAML Configuration
 
-## Quick Start
-
-### 1. Create a YAML Configuration
-
-Create a file `my-app.yaml`:
-
+### Header
 ```yaml
 header:
-  title: " My Application ${APP_VERSION} "
-  subtitle: " by Your Name "
-  link: "https://github.com/yourusername/yourproject"
+  title: "App Title ${VERSION}"
+  subtitle: "Optional subtitle"
+  link: "https://github.com/user/repo"
+```
 
+### Sections
+```yaml
 sections:
-  - label: "SYSTEM INFORMATION"
+  - label: "SECTION NAME"
+    condition: "${SHOW_SECTION}"     # Optional
     entries:
-      - label: "Hostname"
-        value: "${HOSTNAME}"
-      - label: "User"
-        value: "${USER}"
+      - label: "Field"
+        value: "${VALUE}"
+        condition: "${SHOW_FIELD}"   # Optional
+```
 
+### Menu
+```yaml
 menu:
   - key: "1"
-    label: "Run backup"
-    callback: "callbacks/backup.sh"
+    label: "Menu option"
+    callback: "path/to/script.sh"
+    condition: "${SHOW_OPTION}"      # Optional
+```
 
-  - key: "2"
-    label: "Check status"
-    callback: "callbacks/status.sh"
-
+### Footer
+```yaml
 footer:
   - key: "Q"
     label: "quit"
-    callback: "callbacks/quit.sh"
-
-  - key: "R"
-    label: "reboot"
-    callback: "callbacks/reboot.sh"
+    callback: "exit 0"
 ```
 
-### 2. Create Callback Scripts
+## Dynamic Content
 
-Create `callbacks/backup.sh`:
-
-```bash
-#!/bin/bash
-echo "Running backup..."
-sleep 2
-echo "Backup completed!"
-exit 0
-```
-
-Make it executable:
-```bash
-chmod +x callbacks/backup.sh
-```
-
-### 3. Create Your Application Script
-
-Create `my-app.sh`:
-
-```bash
-#!/bin/bash
-
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# Source the TUI core library
-source "${SCRIPT_DIR}/lib/tui-core.sh"
-
-# Set environment variables
-export APP_VERSION="1.0.0"
-
-# Run the TUI
-tui_run "${SCRIPT_DIR}/my-app.yaml"
-```
-
-### 4. Run Your Application
-
-```bash
-chmod +x my-app.sh
-./my-app.sh
-```
-
-## YAML Configuration Reference
-
-### Header Section
+Use bash variable syntax in YAML:
 
 ```yaml
-header:
-  title: "Application Title"        # Main title (supports env vars)
-  subtitle: "Optional subtitle"     # Subtitle text (supports env vars)
-  link: "https://example.com"       # Optional link (supports env vars)
-```
-
-### Information Sections
-
-```yaml
-sections:
-  - label: "SECTION NAME"           # Section header
-    condition: "${SHOW_SECTION}"    # Optional: show/hide section
-    entries:
-      - label: "Field Name"
-        value: "${FIELD_VALUE}"     # Supports env vars
-        condition: "${SHOW_FIELD}"  # Optional: show/hide entry
-```
-
-### Menu Options
-
-```yaml
-menu:
-  - key: "1"                        # Single character key
-    label: "Menu option text"       # Display text (supports env vars)
-    callback: "path/to/script.sh"   # Script to execute
-    condition: "${SHOW_OPTION}"     # Optional: show/hide option
-```
-
-### Footer Actions
-
-```yaml
-footer:
-  - key: "Q"                        # Single character key (case-insensitive)
-    label: "quit"                   # Action description
-    callback: "path/to/script.sh"   # Script to execute
-    condition: "${SHOW_ACTION}"     # Optional: show/hide action
-```
-
-## Dynamic Content with Environment Variables
-
-Use standard bash variable syntax in your YAML:
-
-```yaml
-# Simple variable
+# Environment variables
 value: "${MY_VAR}"
-
-# Variable with default
-value: "${MY_VAR:-default value}"
+value: "${MY_VAR:-default}"
 
 # Command substitution
 value: "$(hostname)"
@@ -224,528 +151,156 @@ value: "$(hostname)"
 
 ## Conditional Display
 
-Control visibility using either **environment variables** or **shell commands**.
-
-### Variable-Based Conditions
-
+**Environment variables:**
 ```yaml
-sections:
-  - label: "ADMIN SECTION"
-    condition: "${IS_ADMIN}"  # Only shown if IS_ADMIN is non-empty and not "false" or "0"
-    entries:
-      - label: "Secret"
-        value: "${SECRET_VALUE}"
+condition: "${IS_ADMIN}"  # Shows if non-empty and not "false" or "0"
 ```
 
-In your script:
 ```bash
-# Show section
-export IS_ADMIN="true"
-
-# Hide section
-export IS_ADMIN=""
-# or
-export IS_ADMIN="false"
-# or
-export IS_ADMIN="0"
+export IS_ADMIN="true"    # Show
+export IS_ADMIN=""        # Hide
+export IS_ADMIN="false"   # Hide
 ```
 
-### Command-Based Conditions
-
-You can also use shell commands as conditions. The command's exit code determines visibility:
-- Exit code 0 (success) → show element
-- Exit code non-zero (failure) → hide element
-
+**Shell commands:**
 ```yaml
-sections:
-  - label: "SSH STATUS"
-    condition: "systemctl is-active sshd.service"  # Only shown if SSH is running
-    entries:
-      - label: "Service"
-        value: "Running"
-
-  - label: "ADMIN SECTION"
-    condition: "test ${UID} -eq 0"  # Only shown when running as root
-    entries:
-      - label: "User"
-        value: "root"
-
-menu:
-  - key: "1"
-    label: "Stop SSH"
-    condition: "systemctl is-active sshd.service"  # Shown when SSH is active
-    callback: "systemctl stop sshd.service"
-
-  - key: "2"
-    label: "Start SSH"
-    condition: "! systemctl is-active sshd.service"  # Shown when SSH is inactive
-    callback: "systemctl start sshd.service"
-
-  - key: "3"
-    label: "Show yq version"
-    condition: "command -v yq"  # Only shown if yq is installed
-    callback: "yq --version"
+condition: "systemctl is-active sshd"     # Show if SSH running
+condition: "test ${UID} -eq 0"            # Show if root
+condition: "! test -f /tmp/lock"          # Show if file doesn't exist
+condition: "command -v docker"            # Show if docker installed
 ```
 
-**Command condition features:**
-- Full bash syntax supported (pipes, `&&`, `||`, `!`, etc.)
-- Command output is suppressed (only exit code matters)
-- Works with `test`, `systemctl`, `command -v`, and any other commands
-- Use `!` to negate conditions
+Commands are executed and exit code determines visibility (0 = show, non-zero =
+hide).
 
 ## Callbacks
 
-Callbacks can be either **executable scripts** or **shell commands**.
-
-### Script Callbacks
-
+**Inline commands:**
 ```yaml
-menu:
-  - key: "1"
-    label: "Run backup"
-    callback: "callbacks/backup.sh"  # Path to executable script
+callback: "echo 'Hello!' && sleep 1"
+callback: "systemctl restart nginx"
+callback: "bash"  # Launch shell
 ```
 
-Create `callbacks/backup.sh`:
-```bash
-#!/bin/bash
-echo "Running backup..."
-sleep 1
-echo "Backup completed!"
-exit 0
-```
-
-Make it executable: `chmod +x callbacks/backup.sh`
-
-### Command Callbacks
-
-You can also use inline shell commands with arguments:
-
+**Script paths:**
 ```yaml
-menu:
-  - key: "1"
-    label: "Echo message"
-    callback: "echo 'Hello from command!' && sleep 1"
-
-  - key: "2"
-    label: "List files"
-    callback: "ls -la /tmp | head -10"
-
-  - key: "3"
-    label: "System info"
-    callback: "echo 'System:' && uname -a"
-
-  - key: "4"
-    label: "Enter shell"
-    callback: "bash"  # Launch interactive bash
+callback: "callbacks/backup.sh"
+callback: "${SCRIPT_DIR}/update.sh"
 ```
 
-**Command features:**
-- Full bash syntax supported (pipes, &&, ||, etc.)
-- Environment variables expanded: `"echo $USER"`
-- Command substitution: `"echo $(date)"`
-- Arguments supported: `"ls -la /tmp"`
+Scripts are executed with `eval`, so use `bash script.sh` for non-executable
+files.
 
-The library automatically:
-- Clears screen before execution
-- Waits for Enter key after completion
-- Returns to menu and redraws
+## Utility Functions
 
-### Using tui-util.sh in Callbacks
-
-Callback scripts can source `tui-util.sh` for enhanced user interaction without depending on the full menu system:
-
+### Colored Output
 ```bash
-#!/bin/bash
-# callbacks/interactive-backup.sh
+tui_print_success "Done!"
+tui_print_warning "Be careful"
+tui_print_error "Failed!"
 
-# Get script directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+tui_print_line_red "Error text"
+tui_print_line_green "Success text"
+tui_print_line_yellow "Warning text"
+```
 
-# Source only the utility library (no yq/jq required)
-source "${SCRIPT_DIR}/../lib/tui-util.sh"
+### User Input
+```bash
+# Text input
+name=$(tui_read_prompt "Enter name")
 
-# Clear screen and show header
+# Password (silent or masked)
+pwd=$(tui_read_password "Password")
+pwd=$(tui_read_password "Password" "*")
+
+# Confirmation
+if tui_read_confirm "Continue?"; then
+    echo "Yes"
+fi
+
+# Choice menu
+choice=$(tui_ask_for_choice "Select:" "a:Apple" "b:Banana")
+choice=$(tui_ask_for_choice_numbered "Select:" "Apple" "Banana")
+```
+
+### Layout & Formatting
+```bash
+tui_print_border
+tui_print_section_header "SECTION TITLE"
+tui_print_section_entry "Label" "Value"  # Auto-wraps long values
+tui_print_menu_option "1" "Menu item"    # Auto-wraps long labels
+```
+
+### Terminal Control
+```bash
 tui_clear_screen
-tui_print_section_header "BACKUP UTILITY"
-
-# Get backup path from user
-backup_path=$(tui_read_prompt "Enter backup destination")
-
-# Confirm before proceeding
-if ! tui_read_confirm "Backup to $backup_path?"; then
-    tui_print_warning "Backup cancelled"
-    exit 1
-fi
-
-# Show progress
-tui_print_section_entry "Status" "Running backup..."
-# ... perform backup ...
-
-if [ $? -eq 0 ]; then
-    tui_print_success "Backup completed successfully!"
-else
-    tui_print_error "Backup failed!"
-    exit 1
-fi
-
-exit 0
+tui_hide_cursor
+tui_show_cursor
 ```
 
-**Benefits of using tui-util.sh in callbacks:**
-- Consistent look and feel with the main menu
-- No yq/jq dependencies
-- Lightweight (only ~300 lines)
-- Rich user interaction (prompts, confirmations, colored output)
-- Reusable functions across all your scripts
-
-## Library API
-
-### Main Functions
-
-#### `tui_run "config.yaml"`
-Main entry point. Loads configuration and starts the TUI loop.
-
-#### `tui_stop`
-Stop the TUI loop and exit cleanly.
-
-### Rendering Functions
-
-#### `tui_render`
-Renders the complete menu (header, sections, menu, footer).
-
-#### `tui_render_header`
-Renders only the header section.
-
-#### `tui_render_info_sections`
-Renders all information sections.
-
-#### `tui_render_menu`
-Renders menu options.
-
-#### `tui_render_footer`
-Renders footer actions.
-
-### Configuration Functions
-
-#### `tui_load_config "file.yaml"`
-Loads a YAML configuration file and parses it into bash arrays for fast rendering.
-
-### Helper Functions
-
-#### `tui_visible_length "text"`
-Calculate visible text length (stripping ANSI escape codes).
-
-#### `tui_generate_border length [char]`
-Generate a border string of specified length (default char: `*`).
-
-#### `tui_echo_normal/red/yellow/green/blue "text"`
-Print colored text using ANSI escape codes.
-
-#### `tui_print_warning "message"` / `tui_print_error "message"` / `tui_print_success "message"`
-Print styled status messages.
-
-#### `tui_print_border`
-Print a full-width border line (respects TUI_MAX_WIDTH=80).
-
-#### `tui_print_section_header "label"`
-Print a section header with borders.
-
-#### `tui_print_section_entry "label" "value"`
-Print a section entry (label: value format) with automatic wrapping for long values.
-
-#### `tui_print_menu_option "key" "label"`
-Print a menu option line with automatic wrapping for long labels.
-
-### Utility Functions (tui-util.sh)
-
-The utility library provides a rich set of functions for scripts and callbacks.
-
-#### Color Variables
-
-Export directly usable in your scripts:
-
-```bash
-#!/bin/bash
-source "lib/tui-util.sh"
-
-# Use color variables directly
-echo -e "${TUI_RED}Error:${TUI_NORMAL} Something went wrong"
-echo -e "Status: ${TUI_GREEN}OK${TUI_NORMAL}"
-printf "${TUI_YELLOW}Warning: %s${TUI_NORMAL}\n" "$message"
-```
-
-Available variables:
-- `TUI_NORMAL` - Reset to normal
-- `TUI_RED` - Red color
-- `TUI_GREEN` - Green color
-- `TUI_YELLOW` - Yellow color
-- `TUI_BLUE` - Blue/Cyan color
-
-#### Colored Output Functions
-
-**Print lines (with newline):**
-- `tui_print_line_red "text"` - Print red line
-- `tui_print_line_yellow "text"` - Print yellow line
-- `tui_print_line_green "text"` - Print green line
-- `tui_print_line_blue "text"` - Print blue line
-- `tui_print_line_normal "text"` - Print normal line
-
-**Print text (without newline):**
-- `tui_print_text_red "text"` - Print red text (no newline)
-- `tui_print_text_yellow "text"` - Print yellow text
-- `tui_print_text_green "text"` - Print green text
-- `tui_print_text_blue "text"` - Print blue text
-- `tui_print_text_normal "text"` - Print normal text
-
-#### Status Messages
-
-- `tui_print_success "message"` - Green success message
-- `tui_print_warning "message"` - Yellow warning with "Warning:" prefix
-- `tui_print_error "message"` - Red error with "Error:" prefix
-
-#### User Input Functions
-
-**Basic Input:**
-```bash
-# Simple text input
-name=$(tui_read_prompt "Enter your name")
-
-# Single keypress
-key=$(tui_read_key)
-
-# Wait for keypress or Enter
-tui_read_key_to_continue
-tui_read_enter_to_continue
-```
-
-**Password Input:**
-```bash
-# Silent password (no feedback)
-password=$(tui_read_password "Enter password")
-
-# Masked password (shows asterisks)
-password=$(tui_read_password "Enter password" "*")
-```
-
-**Confirmations:**
-```bash
-# Simple y/n confirmation
-if tui_read_confirm "Delete file?"; then
-    echo "Deleted"
-fi
-
-# Custom confirmation prompts
-if tui_ask_for_confirmation "Proceed?" "yes" "no"; then
-    echo "Proceeding..."
-fi
-```
-
-**Choice Menus:**
-```bash
-# Custom keys choice menu
-choice=$(tui_ask_for_choice "Select option:" \
-    "a:Apple" \
-    "b:Banana" \
-    "c:Cherry")
-# Returns: "a", "b", or "c"
-
-# Auto-numbered choice menu
-options=("Install" "Update" "Configure" "Exit")
-selected=$(tui_ask_for_choice_numbered "Choose action:" "${options[@]}")
-# Returns: 1, 2, 3, or 4
-
-# Use the selected option
-action="${options[$((selected-1))]}"
-```
-
-#### Layout and Formatting
-
-**Display Functions:**
-- `tui_print_border` - Print full-width border line
-- `tui_print_section_header "LABEL"` - Print section header with borders
-- `tui_print_section_entry "Label" "Value"` - Print formatted entry (auto-wraps long values)
-- `tui_print_menu_option "key" "label"` - Print menu option line (auto-wraps long labels)
-- `tui_generate_border length [char]` - Generate border string
-
-**String Formatting:**
-- `tui_format_wrap "text" width` - Wrap text to multiple lines at word boundaries
-
-**Example:**
-```bash
-# Section entries automatically wrap long values
-ram_info="96GB DDR4 ECC Registered Memory running at 2666MHz"
-tui_print_section_entry "RAM" "$ram_info"
-# Output:
-# **            RAM: 96GB DDR4 ECC Registered Memory
-# **                 running at 2666MHz
-
-# Menu options automatically wrap long labels
-tui_print_menu_option "1" "Install firmware update and configure BIOS settings"
-# Output:
-# **     1) Install firmware update and configure BIOS
-# **          settings
-
-# Direct text wrapping for custom layouts
-tui_format_wrap "Long description text here..." 40
-```
-
-#### Terminal Control
-
-- `tui_clear_screen` - Clear the terminal screen
-- `tui_hide_cursor` - Hide terminal cursor
-- `tui_show_cursor` - Show terminal cursor
-- `tui_clear_line` - Clear current line
-
-#### Utility Helpers
-
-- `tui_expand_vars "string"` - Expand environment variables in a string
-- `tui_check_condition "condition"` - Check if condition is true (env var or command)
-- `tui_visible_length "text"` - Calculate visible text length (strips ANSI codes)
-
-### Complete Utility Example
+## Utility Example
 
 ```bash
 #!/bin/bash
 source "lib/tui-util.sh"
 
 tui_clear_screen
-tui_print_section_header "SYSTEM CONFIGURATION"
+tui_print_section_header "CONFIGURATION"
 
-# Get user input
-hostname=$(tui_read_prompt "Enter hostname")
+hostname=$(tui_read_prompt "Hostname")
+env=$(tui_ask_for_choice "Environment:" "d:Dev" "p:Prod")
 
-# Choose from options
-choice=$(tui_ask_for_choice "Select environment:" \
-    "d:Development" \
-    "s:Staging" \
-    "p:Production")
-
-# Get password with masking
-admin_pwd=$(tui_read_password "Admin password" "*")
-
-# Confirm action
-if tui_ask_for_confirmation "Apply configuration?"; then
-    tui_print_success "Configuration applied!"
+if tui_ask_for_confirmation "Apply changes?"; then
+    tui_print_success "Applied!"
     tui_print_section_entry "Hostname" "$hostname"
-    tui_print_section_entry "Environment" "$choice"
+    tui_print_section_entry "Environment" "$env"
 else
-    tui_print_warning "Configuration cancelled"
+    tui_print_warning "Cancelled"
 fi
-
-tui_read_enter_to_continue
 ```
 
-## Running Tests
+## Pre-render Callbacks
 
-Install bats:
+Update state before each menu render:
 
-**Ubuntu/Debian:**
 ```bash
-sudo apt-get install bats
+#!/bin/bash
+source "lib/tui-core.sh"
+
+# Reload state before each render
+reload_state() {
+    source "state.sh"
+}
+
+tui_register_pre_render_callback reload_state
+tui_run "config.yaml"
 ```
 
-**macOS:**
-```bash
-brew install bats-core
-```
+Useful for toggle scripts that update state files.
 
-**From source:**
-```bash
-git clone https://github.com/bats-core/bats-core.git
-cd bats-core
-sudo ./install.sh /usr/local
-```
+## Example
 
-Run tests:
-```bash
-./tests/run-tests.sh
-```
-
-Or run bats directly:
-```bash
-bats tests/tui-lib.bats
-```
-
-## Example: Dasharo Tools Suite
-
-See the `examples/` directory for a complete example based on the Dasharo Tools Suite:
+See `examples/demo.sh` for a complete working example:
 
 ```bash
 cd examples
 ./demo.sh
 ```
 
-This demonstrates:
-- Multiple information sections
-- Dynamic content from environment variables
-- Conditional section display
-- Menu options with callbacks
-- Footer actions
+Features demonstrated:
+- Multiple sections with dynamic content
+- Conditional display
+- Toggle callbacks (SSH, credentials)
+- Text wrapping for long entries
+- Interactive input in callbacks
 
-## Serial Port Compatibility
+## Testing
 
-The library is designed to work over serial ports:
+```bash
+# Install bats
+sudo apt-get install bats  # Ubuntu/Debian
+brew install bats-core     # macOS
 
-- Uses ANSI escape codes (widely supported)
-- Full clear & redraw (avoids complex cursor positioning)
-- Immediate keypress handling
-- No advanced terminal features required
-
-Tested on:
-- Local terminals (bash, zsh, etc.)
-- SSH sessions
-- Serial consoles (ttyS0, etc.)
-
-## Design Principles
-
-1. **Simplicity**: Easy to create new TUI tools with YAML + callback scripts
-2. **Reliability**: Full clear/redraw approach works everywhere
-3. **Flexibility**: Dynamic content and conditional display
-4. **Maintainability**: Separation of UI (YAML) and logic (callbacks)
-
-## Implementation Details
-
-### Why both `yq` and `jq`?
-
-The library uses both `yq` and `jq` for YAML parsing, which may seem redundant. Here's why:
-
-**Current approach:**
-1. `yq` converts YAML → JSON (once, at config load time)
-2. `jq` parses the JSON into bash arrays (once, at config load time)
-3. Rendering uses **pure bash** (zero external process calls)
-
-**Alternative approaches considered:**
-
-**Option 1: Use only `yq`**
-- Pro: Single dependency
-- Con: Would need to call `yq` multiple times during parsing
-- Con: `yq` is slower than `jq` for JSON queries
-
-**Option 2: Use `yq` with direct output format**
-- Use `yq` to output TSV/CSV directly: `yq eval '.menu[] | .key + "\t" + .label' config.yaml`
-- Pro: Single dependency
-- Con: More complex escaping for special characters
-- Con: Still need multiple `yq` calls for nested structures
-
-**Option 3: Current hybrid approach (chosen)**
-- `yq` once: YAML → JSON (fast, keeps JSON cached)
-- `jq` multiple times: Parse JSON → bash arrays (fast for JSON operations)
-- Rendering: Pure bash (instant, no external processes)
-- Pro: Fastest overall performance (zero external calls during rendering)
-- Pro: `jq` is typically pre-installed on most systems
-- Con: Two dependencies instead of one
-
-**Performance comparison:**
-- Config loading: Once per application start (acceptable overhead)
-- Rendering: **Zero external processes** = instant (critical for responsive UI)
-
-The hybrid approach prioritizes rendering performance, which happens on every menu redraw, over a slightly simpler dependency chain.
-
-## Limitations
-
-- Menu limited to 0-10 options (single keypress)
-- Footer limited to 0-10 actions (single keypress)
-- No mouse support
-- No complex layouts beyond defined sections
-- Full screen redraw (brief flicker possible)
+# Run tests
+bats tests/
+```

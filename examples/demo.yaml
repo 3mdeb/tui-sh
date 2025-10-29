@@ -73,6 +73,10 @@ menu:
     callback: "echo 'Downloading diagnostics tool...' && sleep 1 && echo 'Installation complete!'"
 
 footer:
+  - key: "Q"
+    label: "quit"
+    callback: "exit 0"
+
   - key: "R"
     label: "reboot"
     callback: "echo 'System will reboot now...' && sleep 1"

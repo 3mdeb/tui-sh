@@ -366,12 +366,6 @@ tui_handle_input() {
     # Convert to uppercase for case-insensitive matching
     key=$(echo "$key" | tr '[:lower:]' '[:upper:]')
 
-    # Hidden option: Q to quit (useful for testing)
-    if [[ "$key" == "Q" ]]; then
-        tui_stop
-        return 0
-    fi
-
     # Try to find callback in menu items
     local callback
     if callback=$(tui_find_menu_callback "$key"); then

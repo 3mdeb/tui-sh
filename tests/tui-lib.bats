@@ -1,9 +1,11 @@
 #!/usr/bin/env bats
 # Unit tests for TUI library
 
+bats_require_minimum_version 1.5.0
+
 setup() {
     # Load the library
-    source "${BATS_TEST_DIRNAME}/../lib/tui-lib.sh"
+    source "${BATS_TEST_DIRNAME}/../lib/tui-core.sh"
 
     # Create temporary directory for test files
     TEST_DIR=$(mktemp -d)
@@ -17,7 +19,7 @@ teardown() {
 
 # Test: Library can be sourced
 @test "Library loads without errors" {
-    run bash -c "source ${BATS_TEST_DIRNAME}/../lib/tui-lib.sh && echo success"
+    run bash -c "source ${BATS_TEST_DIRNAME}/../lib/tui-core.sh && echo success"
     [ "$status" -eq 0 ]
     [[ "$output" == *"success"* ]]
 }
@@ -44,11 +46,7 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-@test "tui_check_condition returns false for empty string" {
-    export CONDITION_VAR=""
-    run tui_check_condition "\$CONDITION_VAR"
-    [ "$status" -eq 1 ]
-}
+# Note: Empty string condition is treated as "no condition" and returns true (test 8 covers this)
 
 @test "tui_check_condition returns false for false value" {
     export CONDITION_VAR="false"
@@ -64,6 +62,38 @@ teardown() {
 
 @test "tui_check_condition returns true for empty condition" {
     run tui_check_condition ""
+    [ "$status" -eq 0 ]
+}
+
+# Test: Command-based conditions
+@test "tui_check_condition returns true for successful command" {
+    run tui_check_condition "true"
+    [ "$status" -eq 0 ]
+}
+
+@test "tui_check_condition returns false for failed command" {
+    run tui_check_condition "false"
+    [ "$status" -eq 1 ]
+}
+
+@test "tui_check_condition suppresses command output" {
+    run tui_check_condition "echo 'should not see this'"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"should not see this"* ]]
+}
+
+@test "tui_check_condition works with command arguments" {
+    run tui_check_condition "test -d /tmp"
+    [ "$status" -eq 0 ]
+}
+
+@test "tui_check_condition returns false for non-existent directory" {
+    run tui_check_condition "test -d /nonexistent-directory-12345"
+    [ "$status" -eq 1 ]
+}
+
+@test "tui_check_condition handles negated commands" {
+    run tui_check_condition "! false"
     [ "$status" -eq 0 ]
 }
 
@@ -174,17 +204,31 @@ EOF
 }
 
 # Test: Callback execution
-@test "tui_execute_callback fails for non-existent script" {
-    run tui_execute_callback "$TEST_DIR/nonexistent.sh"
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"not found"* ]]
+@test "tui_execute_callback runs non-existent script with error" {
+    # Mock read to avoid waiting for input
+    tui_read_enter_to_continue() { :; }
+    export -f tui_read_enter_to_continue
+
+    # Callbacks are executed with eval, so non-existent files will fail
+    # Exit code 127 means "command not found" which is expected for non-existent files
+    run -127 tui_execute_callback "$TEST_DIR/nonexistent.sh"
 }
 
-@test "tui_execute_callback fails for non-executable script" {
-    touch "$TEST_DIR/not_executable.sh"
-    run tui_execute_callback "$TEST_DIR/not_executable.sh"
-    [ "$status" -eq 1 ]
-    [[ "$output" == *"not executable"* ]]
+@test "tui_execute_callback runs non-executable file with bash" {
+    # Mock read to avoid waiting for input
+    tui_read_enter_to_continue() { :; }
+    export -f tui_read_enter_to_continue
+
+    # Create a non-executable script
+    cat > "$TEST_DIR/not_executable.sh" <<'EOF'
+#!/bin/bash
+echo "executed via bash"
+EOF
+
+    # To execute non-executable scripts, use: bash script.sh
+    run tui_execute_callback "bash $TEST_DIR/not_executable.sh"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"executed via bash"* ]]
 }
 
 @test "tui_execute_callback runs executable script" {
@@ -196,13 +240,34 @@ exit 0
 EOF
     chmod +x "$TEST_DIR/test_callback.sh"
 
-    # Mock tui_read_key to avoid waiting for input
-    tui_read_key() { echo ""; }
-    export -f tui_read_key
+    # Mock read to avoid waiting for input
+    tui_read_enter_to_continue() { :; }
+    export -f tui_read_enter_to_continue
 
     run tui_execute_callback "$TEST_DIR/test_callback.sh"
     [ "$status" -eq 0 ]
     [[ "$output" == *"callback executed"* ]]
+}
+
+@test "tui_execute_callback runs shell command" {
+    # Mock read to avoid waiting for input
+    tui_read_enter_to_continue() { :; }
+    export -f tui_read_enter_to_continue
+
+    run tui_execute_callback "echo 'command executed' && echo 'with args'"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"command executed"* ]]
+    [[ "$output" == *"with args"* ]]
+}
+
+@test "tui_execute_callback runs command with pipes" {
+    # Mock read to avoid waiting for input
+    tui_read_enter_to_continue() { :; }
+    export -f tui_read_enter_to_continue
+
+    run tui_execute_callback "echo 'line1' && echo 'line2' | grep line2"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"line2"* ]]
 }
 
 # Test: Header rendering

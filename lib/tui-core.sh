@@ -1,6 +1,6 @@
 #!/bin/bash
 # TUI Core Library - Main menu system and rendering engine
-# Requires: tui-util.sh, yq (YAML processor), jq (JSON processor)
+# Requires: tui-util.sh, yq (YAML processor)
 
 # Get the directory where this script is located
 TUI_CORE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -59,60 +59,73 @@ tui_load_config() {
         return 1
     fi
 
-    if ! command -v jq &>/dev/null; then
-        echo "Error: jq is required but not installed" >&2
-        return 1
-    fi
-
-    # Convert YAML to JSON once
-    local json_config
-    json_config=$(yq eval -o=json "$config_file")
-
-    # Parse header
-    TUI_HEADER_TITLE=$(echo "$json_config" | jq -r '.header.title // ""')
-    TUI_HEADER_SUBTITLE=$(echo "$json_config" | jq -r '.header.subtitle // ""')
-    TUI_HEADER_LINK=$(echo "$json_config" | jq -r '.header.link // ""')
-
-    # Clear arrays
+    # Clear all data arrays
     TUI_SECTIONS_DATA=()
     TUI_ENTRIES_DATA=()
     TUI_MENU_DATA=()
     TUI_FOOTER_DATA=()
 
-    # Parse sections
+    # Parse header fields (title, subtitle, link)
+    # Using '.header.title // ""' means: get .header.title, or "" if null/missing
+    TUI_HEADER_TITLE=$(yq eval '.header.title // ""' "$config_file")
+    TUI_HEADER_SUBTITLE=$(yq eval '.header.subtitle // ""' "$config_file")
+    TUI_HEADER_LINK=$(yq eval '.header.link // ""' "$config_file")
+
+    # Parse sections array
+    # For each section, we extract: condition and label
+    # Output format: "condition|label" (using | as delimiter)
     local section_idx=0
     while IFS='|' read -r condition label; do
+        # Skip empty lines
         if [[ -z "$label" && -z "$condition" ]]; then
             continue
         fi
+
+        # Store section data as: "condition|label"
         TUI_SECTIONS_DATA+=("$condition|$label")
 
         # Parse entries for this section
+        # For each entry, extract: condition, label, and value
+        # Output format: "section_idx|condition|label|value"
         while IFS='|' read -r entry_cond entry_label entry_value; do
+            # Skip empty entries
             if [[ -z "$entry_label" && -z "$entry_value" ]]; then
                 continue
             fi
+
+            # Store entry data as: "section_idx|condition|label|value"
+            # section_idx links this entry to its parent section
             TUI_ENTRIES_DATA+=("$section_idx|$entry_cond|$entry_label|$entry_value")
-        done < <(echo "$json_config" | jq -r ".sections[$section_idx].entries[]? | \"\(.condition // \"\")|\" + (.label | gsub(\"\\\\|\"; \"\\\\|\" )) + \"|\" + (.value | gsub(\"\\\\|\"; \"\\\\|\"))")
+        done < <(yq eval ".sections[$section_idx].entries[]? | (.condition // \"\") + \"|\" + .label + \"|\" + .value" "$config_file")
 
         ((section_idx++))
-    done < <(echo "$json_config" | jq -r '.sections[]? | "\(.condition // "")|" + (.label | gsub("\\|"; "\\|"))')
+    done < <(yq eval '.sections[]? | (.condition // "") + "|" + .label' "$config_file")
 
-    # Parse menu items
+    # Parse menu items array
+    # For each menu item, extract: key, condition, label, callback
+    # Output format: "key|condition|label|callback"
     while IFS='|' read -r key condition label callback; do
+        # Skip entries without a key
         if [[ -z "$key" ]]; then
             continue
         fi
+
+        # Store menu data as: "key|condition|label|callback"
         TUI_MENU_DATA+=("$key|$condition|$label|$callback")
-    done < <(echo "$json_config" | jq -r '.menu[]? | .key + "|" + (.condition // "") + "|" + (.label | gsub("\\|"; "\\|")) + "|" + .callback')
+    done < <(yq eval '.menu[]? | .key + "|" + (.condition // "") + "|" + .label + "|" + .callback' "$config_file")
 
-    # Parse footer items
+    # Parse footer items array
+    # For each footer item, extract: key, condition, label, callback
+    # Output format: "key|condition|label|callback"
     while IFS='|' read -r key condition label callback; do
+        # Skip entries without a key
         if [[ -z "$key" ]]; then
             continue
         fi
+
+        # Store footer data as: "key|condition|label|callback"
         TUI_FOOTER_DATA+=("$key|$condition|$label|$callback")
-    done < <(echo "$json_config" | jq -r '.footer[]? | .key + "|" + (.condition // "") + "|" + (.label | gsub("\\|"; "\\|")) + "|" + .callback')
+    done < <(yq eval '.footer[]? | .key + "|" + (.condition // "") + "|" + .label + "|" + .callback' "$config_file")
 }
 
 # ============================================================================

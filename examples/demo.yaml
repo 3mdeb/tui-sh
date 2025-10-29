@@ -37,53 +37,57 @@ sections:
 menu:
   - key: "1"
     label: "Dasharo HCL report"
-    callback: "${SCRIPT_DIR}/callbacks/hcl-report.sh"
+    callback: "echo 'Generating HCL report...' && sleep 1 && echo 'Report saved to /tmp/hcl-report.txt'"
 
   - key: "2"
     label: "${DASHARO_FIRMWARE_LABEL}"
-    callback: "${SCRIPT_DIR}/callbacks/dasharo-firmware.sh"
+    callback: "echo 'Checking for firmware updates...' && sleep 1 && echo 'Firmware is up to date'"
     condition: "${SHOW_DASHARO_FIRMWARE}"
 
   - key: "3"
     label: "Restore firmware from Dasharo HCL report"
-    callback: "${SCRIPT_DIR}/callbacks/restore-firmware.sh"
+    callback: "echo 'Restoring firmware from HCL report...' && sleep 1 && echo 'Firmware restored successfully'"
     condition: "${SHOW_RESTORE_FIRMWARE}"
 
   - key: "4"
     label: "${DPP_KEYS_LABEL}"
-    callback: "${SCRIPT_DIR}/callbacks/dpp-keys.sh"
+    callback: "echo 'Opening DPP keys editor...' && sleep 1"
 
   - key: "5"
     label: "DTS extensions"
-    callback: "${SCRIPT_DIR}/callbacks/dts-extensions.sh"
+    callback: "echo 'Loading DTS extensions...' && sleep 1 && echo 'No extensions available'"
     condition: "${SHOW_DTS_EXTENSIONS}"
 
   - key: "6"
     label: "Transition Dasharo Firmware"
-    callback: "${SCRIPT_DIR}/callbacks/transition.sh"
+    callback: "echo 'Transitioning to Dasharo firmware...' && sleep 1 && echo 'Transition completed'"
     condition: "${SHOW_TRANSITION}"
 
   - key: "7"
     label: "Fuse platform"
-    callback: "${SCRIPT_DIR}/callbacks/fuse.sh"
+    callback: "echo 'WARNING: This will permanently fuse the platform!' && sleep 2"
     condition: "${SHOW_FUSE}"
+
+  - key: "8"
+    label: "Download and install comprehensive system diagnostics tool with hardware validation and automated reporting capabilities"
+    callback: "echo 'Downloading diagnostics tool...' && sleep 1 && echo 'Installation complete!'"
 
 footer:
   - key: "R"
     label: "reboot"
-    callback: "${SCRIPT_DIR}/callbacks/reboot.sh"
+    callback: "echo 'System will reboot now...' && sleep 1"
 
   - key: "P"
     label: "poweroff"
-    callback: "${SCRIPT_DIR}/callbacks/poweroff.sh"
+    callback: "echo 'System will power off now...' && sleep 1"
 
   - key: "S"
     label: "enter shell"
-    callback: "${SCRIPT_DIR}/callbacks/shell.sh"
+    callback: "bash"
 
   - key: "K"
     label: "${SSH_LABEL}"
-    callback: "${SCRIPT_DIR}/callbacks/ssh-toggle.sh"
+    callback: "${SCRIPT_DIR}/callbacks/toggle-ssh.sh"
 
   - key: "L"
     label: "${SEND_LOGS_LABEL}"
